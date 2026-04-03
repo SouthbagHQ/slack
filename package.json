@@ -5,15 +5,13 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "npx wrangler dev",
-    "deploy": "npx wrangler deploy",
+    "dev": "node src/index.js",
     "convex:dev": "npx convex dev",
     "convex:deploy": "npx convex deploy"
   },
   "dependencies": {
-    "convex": "^1.17.0"
-  },
-  "devDependencies": {
-    "wrangler": "^3.0.0"
+    "@slack/bolt": "^4.1.0",
+    "convex": "^1.17.0",
+    "dotenv": "^16.4.0"
   }
 }
