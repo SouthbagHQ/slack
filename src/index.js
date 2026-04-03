@@ -51,12 +51,20 @@ async function handleMessage({ event, client }) {
     const tz = userInfo.user.tz_label || userInfo.user.tz || 'Unknown';
     const parts = [];
     if (p.display_name || p.real_name) parts.push(`Name: ${p.display_name || p.real_name}`);
+    if (p.first_name) parts.push(`First name: ${p.first_name}`);
+    if (p.last_name) parts.push(`Last name: ${p.last_name}`);
     if (p.title) parts.push(`Title: ${p.title}`);
+    if (p.email) parts.push(`Email: ${p.email}`);
     if (p.phone) parts.push(`Phone: ${p.phone}`);
     if (p.status_text) parts.push(`Status: "${p.status_text}" ${p.status_emoji || ''}`);
     parts.push(`Timezone: ${tz}`);
     if (p.pronouns) parts.push(`Pronouns: ${p.pronouns}`);
-    if (p.skype) parts.push(`Skype: ${p.skype}`);
+    if (p.start_date) parts.push(`Start date: ${p.start_date}`);
+    if (p.fields && Object.keys(p.fields).length > 0) {
+      for (const [, field] of Object.entries(p.fields)) {
+        if (field.value) parts.push(`Custom field: ${field.alt || field.label || ''}: ${field.value}`);
+      }
+    }
     if (userInfo.user.is_admin) parts.push('Is a workspace admin');
     if (userInfo.user.is_owner) parts.push('Is the workspace owner');
     profileContext = `\n[USER SLACK PROFILE (use this to roast them): ${parts.join('. ')}]`;

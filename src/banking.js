@@ -52,9 +52,9 @@ function registerBankingCommands(app, convex, api) {
 
     const statusEmoji = {
       active: '',
-      frozen: ' :ice_cube: FROZEN',
-      suspicious: ' :eyes: SUSPICIOUS',
-      'vibes-based': ' :crystal_ball: VIBES-BASED',
+      frozen: ' FROZEN',
+      suspicious: ' SUSPICIOUS',
+      'vibes-based': ' VIBES-BASED',
     };
 
     await respond({
@@ -390,7 +390,7 @@ function registerBankingCommands(app, convex, api) {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*Defaulted amount:* ${formatMoney(result.defaultedAmount)}\n*Account status:* :ice_cube: *FROZEN*\n\n_Your account has been frozen. Southbag remembers. Southbag always remembers._`,
+              text: `*Defaulted amount:* ${formatMoney(result.defaultedAmount)}\n*Account status:* *FROZEN*\n\n_Your account has been frozen. Southbag remembers. Southbag always remembers._`,
             },
           },
         ],
@@ -428,7 +428,7 @@ function registerBankingCommands(app, convex, api) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*Principal:* ${formatMoney(result.principal)}\n*Interest rate:* ${result.interestRate}% per hour\n*New balance:* ${formatMoney(result.newBalance)}\n\n:warning: _Interest accrues every hour. Repay with \`/south-loan repay\` before it spirals. Or don't. We love spirals._`,
+            text: `*Principal:* ${formatMoney(result.principal)}\n*Interest rate:* ${result.interestRate}% per hour\n*New balance:* ${formatMoney(result.newBalance)}\n\n_Interest accrues every hour. Repay with \`/south-loan repay\` before it spirals. Or don't. We love spirals._`,
           },
         },
       ],
@@ -513,7 +513,7 @@ function registerBankingCommands(app, convex, api) {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `You tried to rob <@${result.victimId}> and got *caught*.\n\n*Fine:* -${formatMoney(result.fine)}\n*New balance:* ${formatMoney(result.newBalance)}\n*Account status:* :eyes: suspicious\n\n_Maybe try being less obvious next time._`,
+              text: `You tried to rob <@${result.victimId}> and got *caught*.\n\n*Fine:* -${formatMoney(result.fine)}\n*New balance:* ${formatMoney(result.newBalance)}\n*Account status:* suspicious\n\n_Maybe try being less obvious next time._`,
             },
           },
         ],
@@ -588,7 +588,7 @@ function registerBankingCommands(app, convex, api) {
     if (result.pay < 0) {
       await respond({
         response_type: 'ephemeral',
-        text: `:rotating_light: *Workplace Incident* at your ${result.title} job\n\nYou owe: ${formatMoney(Math.abs(result.pay))}\nNew balance: ${formatMoney(result.newBalance)}\n\n_Maybe don't touch the shredder next time._`,
+        text: `*Workplace Incident* at your ${result.title} job\n\nYou owe: ${formatMoney(Math.abs(result.pay))}\nNew balance: ${formatMoney(result.newBalance)}\n\n_Maybe don't touch the shredder next time._`,
       });
     } else {
       await respond({
@@ -655,7 +655,7 @@ function registerBankingCommands(app, convex, api) {
 
     await notifyBalanceChange(client, convex, api, userId, `Coinflip ${result.won ? 'win' : 'loss'}`, result.net, result.newBalance);
 
-    const emoji = result.result === 'heads' ? ':coin:' : ':coin:';
+    const emoji = '';
     await respond({
       response_type: 'ephemeral',
       text: result.won
@@ -696,7 +696,7 @@ function registerBankingCommands(app, convex, api) {
 
     await respond({
       response_type: 'ephemeral',
-      text: `:slot_machine: *[ ${result.reels.join(" | ")} ]*\n\n${outcomeText}\n\nNew balance: ${formatMoney(result.newBalance)}`,
+      text: `*[ ${result.reels.join(" | ")} ]*\n\n${outcomeText}\n\nNew balance: ${formatMoney(result.newBalance)}`,
     });
   });
 
@@ -721,11 +721,11 @@ function registerBankingCommands(app, convex, api) {
 
     await notifyBalanceChange(client, convex, api, userId, `Card Game (${game}): ${result.outcome}`, result.net, result.newBalance);
 
-    let emoji = ':black_joker:';
+    let emoji = '';
     let flavor = '';
-    if (result.outcome === 'JACKPOT') { emoji = ':star2:'; flavor = `_Unbelievable luck at ${game}! Southbag will be investigating this._`; }
+    if (result.outcome === 'JACKPOT') { flavor = `_Unbelievable luck at ${game}! Southbag will be investigating this._`; }
     else if (result.multiplier >= 3) { flavor = `_Big win in ${game}. Enjoy it while it lasts._`; }
-    else if (result.multiplier < 0) { emoji = ':fire:'; flavor = `_You didn't just lose your bet in ${game}. You lost MORE than your bet. Classic Southbag._`; }
+    else if (result.multiplier < 0) { flavor = `_You didn't just lose your bet in ${game}. You lost MORE than your bet. Classic Southbag._`; }
     else if (!result.won) { flavor = `_Thank you for your donation to the Southbag executive bonus pool via ${game}._`; }
     else { flavor = `_Not bad at ${game}. We'll get it back._`; }
 
@@ -1140,7 +1140,7 @@ function registerBankingCommands(app, convex, api) {
 
       await respond({
         response_type: 'in_channel',
-        text: `:rotating_light: <@${userId}> is planning a *VAULT HEIST*! :rotating_light:\n\nType \`/south-heist join\` to join the crew.\nWhen ready, the organizer types \`/south-heist go\` to execute.\n\n_Fortune favors the bold. Southbag favors nobody._`,
+        text: `<@${userId}> is planning a *VAULT HEIST*!\n\nType \`/south-heist join\` to join the crew.\nWhen ready, the organizer types \`/south-heist go\` to execute.\n\n_Fortune favors the bold. Southbag favors nobody._`,
       });
       return;
     }
@@ -1156,7 +1156,7 @@ function registerBankingCommands(app, convex, api) {
 
       await respond({
         response_type: 'in_channel',
-        text: `:bust_in_silhouette: <@${userId}> joined the heist crew! *${result.participantCount}* members ready.\n\n_More people = bigger vault. Also more ways to get caught._`,
+        text: `<@${userId}> joined the heist crew! *${result.participants}* members ready.\n\nMore people = bigger vault. Also more ways to get caught.`,
       });
       return;
     }

@@ -99,7 +99,7 @@ async function executeCommands(commands, say, client, event, { convex, api, noti
 
         case 'disconnect':
           await say({
-            text: `*Connection lost.* The agent has disconnected. :no_entry:`,
+            text: `*Connection lost.* The agent has disconnected.`,
             thread_ts: event.thread_ts || event.ts
           });
           try {
