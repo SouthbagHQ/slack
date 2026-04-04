@@ -95,7 +95,7 @@ export const execute = mutation({
       .first();
     if (!heist) return { error: "no_heist" };
     if (heist.startedBy !== args.userId) return { error: "not_starter" };
-    if (heist.participants.length < 2) return { error: "need_more_participants" };
+    if (heist.participants.length < 2) return { error: "not_enough" };
 
     const now = Date.now();
     const successChance = Math.min(0.30 + 0.10 * heist.participants.length, 0.80);
@@ -126,13 +126,26 @@ export const execute = mutation({
 
       await ctx.db.patch(heist._id, { status: "completed", completedAt: now });
 
+      const participantDetails: { userId: string; share: number; newBalance: number }[] = [];
+      for (const participantId of heist.participants) {
+        const acc = await ctx.db
+          .query("accounts")
+          .withIndex("by_user", (q) => q.eq("userId", participantId))
+          .first();
+        participantDetails.push({
+          userId: participantId,
+          share: individualShare,
+          newBalance: acc ? acc.balance : 0,
+        });
+      }
+
       return {
         success: true,
-        vaultPayout,
+        totalPayout: afterInsurance,
         insuranceDeductible: Math.round((vaultPayout * 0.25) * 100) / 100,
         netPayout: afterInsurance,
         individualShare,
-        participants: heist.participants,
+        participants: participantDetails,
       };
     } else {
       const fines: { userId: string; fine: number }[] = [];
@@ -158,10 +171,22 @@ export const execute = mutation({
 
       await ctx.db.patch(heist._id, { status: "failed", completedAt: now });
 
+      const failedParticipants: { userId: string; fine: number; newBalance: number }[] = [];
+      for (const f of fines) {
+        const acc = await ctx.db
+          .query("accounts")
+          .withIndex("by_user", (q) => q.eq("userId", f.userId))
+          .first();
+        failedParticipants.push({
+          userId: f.userId,
+          fine: f.fine,
+          newBalance: acc ? acc.balance : 0,
+        });
+      }
+
       return {
         success: false,
-        participants: heist.participants,
-        fines,
+        participants: failedParticipants,
       };
     }
   },

@@ -139,6 +139,24 @@
         "command": "/south-mystery-fee",
         "description": "Charge yourself a mystery fee. Why would you.",
         "should_escape": false
+      },
+      {
+        "command": "/south-leaderboard",
+        "description": "See the richest or poorest Southbag users",
+        "usage_hint": "[top | bottom]",
+        "should_escape": false
+      },
+      {
+        "command": "/south-invest",
+        "description": "Invest money for potential returns (or total loss)",
+        "usage_hint": "<amount> | collect | status",
+        "should_escape": false
+      },
+      {
+        "command": "/south-audit",
+        "description": "Pay $0.25 to expose someone's finances publicly",
+        "usage_hint": "@user",
+        "should_escape": true
       }
     ]
   },

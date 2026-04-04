@@ -68,6 +68,15 @@ export default defineSchema({
     status: v.string(), // "active" | "defaulted" | "paid"
   }).index("by_user", ["userId"]),
 
+  investments: defineTable({
+    userId: v.string(),
+    amount: v.number(),
+    multiplier: v.number(),
+    maturesAt: v.number(),
+    status: v.string(), // "active" | "matured" | "crashed"
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
+
   transactions: defineTable({
     userId: v.string(),
     type: v.string(), // "deposit" | "withdrawal" | "transfer" | "fee" | "mystery"

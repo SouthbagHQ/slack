@@ -766,7 +766,7 @@ function registerBankingCommands(app, convex, api) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*Reward:* ${formatMoney(result.reward)}${result.bonus ? ' :star: *BONUS!*' : ''}\n*Daily claim fee:* -${formatMoney(result.fee)}\n*Net received:* ${formatMoney(result.net)}\n\n*New balance:* ${formatMoney(result.newBalance)}`,
+            text: `*Reward:* ${formatMoney(result.reward)}${result.bonus ? ' *BONUS!*' : ''}\n*Daily claim fee:* -${formatMoney(result.fee)}\n*Net received:* ${formatMoney(result.net)}\n\n*New balance:* ${formatMoney(result.newBalance)}`,
           },
         },
         {
@@ -832,7 +832,7 @@ function registerBankingCommands(app, convex, api) {
 
       await respond({
         response_type: 'ephemeral',
-        text: `:chart_with_upwards_trend: *Crypto Purchase*\n\nBought: *${result.coinAmount} ${coin}*\nSpent: ${formatMoney(amount)}\nTransaction fee: -${formatMoney(result.fee)}\n\nNew balance: ${formatMoney(result.newBalance)}\n\n_To the moon! (Results may vary. Moon not guaranteed.)_`,
+        text: `*Crypto Purchase*\n\nBought: *${result.coinAmount} ${coin}*\nSpent: ${formatMoney(amount)}\nTransaction fee: -${formatMoney(result.fee)}\n\nNew balance: ${formatMoney(result.newBalance)}\n\n_To the moon! (Results may vary. Moon not guaranteed.)_`,
       });
       return;
     }
@@ -856,7 +856,7 @@ function registerBankingCommands(app, convex, api) {
 
       await respond({
         response_type: 'ephemeral',
-        text: `:chart_with_downwards_trend: *Crypto Sale*\n\nSold: *${result.amount} ${coin}*\nProceeds: ${formatMoney(result.proceeds)}\nCapital gains tax: -${formatMoney(result.tax)}\n\nNew balance: ${formatMoney(result.newBalance)}\n\n_Diamond hands? More like paper hands. Southbag approves._`,
+        text: `*Crypto Sale*\n\nSold: *${result.amount} ${coin}*\nProceeds: ${formatMoney(result.proceeds)}\nCapital gains tax: -${formatMoney(result.tax)}\n\nNew balance: ${formatMoney(result.newBalance)}\n\n_Diamond hands? More like paper hands. Southbag approves._`,
       });
       return;
     }
@@ -1070,7 +1070,7 @@ function registerBankingCommands(app, convex, api) {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*Your claim:* "${reason}"\n*Status:* :x: *DENIED*\n*Reason:* ${result.denialReason}\n\n*Claim processing fee:* -${formatMoney(result.processingFee)}\n*New balance:* ${formatMoney(result.newBalance)}`,
+              text: `*Your claim:* "${reason}"\n*Status:* *DENIED*\n*Reason:* ${result.denialReason}\n\n*Claim processing fee:* -${formatMoney(result.processingFee)}\n*New balance:* ${formatMoney(result.newBalance)}`,
             },
           },
           {
@@ -1090,7 +1090,7 @@ function registerBankingCommands(app, convex, api) {
       if (result.error === 'no_account') { await respond({ response_type: 'ephemeral', text: "No account. `/south-open-account` first." }); return; }
 
       if (!result.plan) {
-        await respond({ response_type: 'ephemeral', text: ":warning: You are currently *uninsured*. Not that insurance would help you here. `/south-insure buy <plan>`" });
+        await respond({ response_type: 'ephemeral', text: "You are currently *uninsured*. Not that insurance would help you here. `/south-insure buy <plan>`" });
         return;
       }
 
@@ -1150,7 +1150,7 @@ function registerBankingCommands(app, convex, api) {
 
       if (result.error === 'no_heist') { await respond({ response_type: 'ephemeral', text: "There's no active heist to join. Someone needs to `/south-heist start` first." }); return; }
       if (result.error === 'already_joined') { await respond({ response_type: 'ephemeral', text: "You're already in the crew. Sit tight." }); return; }
-      if (result.error === 'full') { await respond({ response_type: 'ephemeral', text: "The crew is full. Too many cooks spoil the heist." }); return; }
+      if (result.error === 'heist_full') { await respond({ response_type: 'ephemeral', text: "The crew is full. Too many cooks spoil the heist." }); return; }
       if (result.error === 'no_account') { await respond({ response_type: 'ephemeral', text: "No account. `/south-open-account` first." }); return; }
       if (result.error) { await respond({ response_type: 'ephemeral', text: `Heist error: ${result.error}` }); return; }
 
@@ -1180,7 +1180,7 @@ function registerBankingCommands(app, convex, api) {
 
         await respond({
           response_type: 'in_channel',
-          text: `:moneybag: *THE HEIST WAS A SUCCESS!* :moneybag:\n\n*Vault payout:* ${formatMoney(result.totalPayout)}\n\n*Crew shares:*\n${participantLines}\n\n_Southbag will be reviewing the security tapes. Eventually._`,
+          text: `*THE HEIST WAS A SUCCESS!*\n\n*Vault payout:* ${formatMoney(result.totalPayout)}\n\n*Crew shares:*\n${participantLines}\n\n_Southbag will be reviewing the security tapes. Eventually._`,
         });
       } else {
         const participantLines = result.participants.map(
@@ -1193,7 +1193,7 @@ function registerBankingCommands(app, convex, api) {
 
         await respond({
           response_type: 'in_channel',
-          text: `:oncoming_police_car: *THE HEIST FAILED!* :oncoming_police_car:\n\nThe crew got caught. Everyone pays.\n\n*Fines:*\n${participantLines}\n\n_Crime doesn't pay. Except when it does. Which is not now._`,
+          text: `*THE HEIST FAILED!*\n\nThe crew got caught. Everyone pays.\n\n*Fines:*\n${participantLines}\n\n_Crime doesn't pay. Except when it does. Which is not now._`,
         });
       }
       return;
@@ -1220,27 +1220,27 @@ function registerBankingCommands(app, convex, api) {
     if (result.error) { await respond({ response_type: 'ephemeral', text: `Error: ${result.error}` }); return; }
 
     let message;
-    switch (result.type) {
+    switch (result.outcomeType) {
       case 'denied':
-        message = `:no_entry_sign: You held out your hand. The teller looked at you, laughed, and walked away.\n\n*Received:* nothing. Absolutely nothing.`;
+        message = `You held out your hand. The teller looked at you, laughed, and walked away.\n\n*Received:* nothing. Absolutely nothing.`;
         break;
       case 'tiny':
-        message = `:coin: A teller flicked a coin at you. It bounced off your forehead.\n\n*Received:* ${formatMoney(result.amount)}\n*New balance:* ${formatMoney(result.newBalance)}`;
+        message = `A teller flicked a coin at you. It bounced off your forehead.\n\n*Received:* ${formatMoney(result.amount)}\n*New balance:* ${formatMoney(result.newBalance)}`;
         break;
       case 'decent':
-        message = `:moneybag: Someone took pity on you and tossed some cash your way.\n\n*Received:* ${formatMoney(result.amount)}\n*New balance:* ${formatMoney(result.newBalance)}`;
+        message = `Someone took pity on you and tossed some cash your way.\n\n*Received:* ${formatMoney(result.amount)}\n*New balance:* ${formatMoney(result.newBalance)}`;
         break;
       case 'reverse':
-        message = `:rotating_light: YOU got charged for begging in the lobby. Security was called.\n\n*Lost:* ${formatMoney(Math.abs(result.amount))}\n*New balance:* ${formatMoney(result.newBalance)}`;
+        message = `YOU got charged for begging in the lobby. Security was called.\n\n*Lost:* ${formatMoney(Math.abs(result.amount))}\n*New balance:* ${formatMoney(result.newBalance)}`;
         break;
       case 'jackpot':
-        message = `:star2: The teller felt genuinely sorry for you. That's never happened before.\n\n*Received:* ${formatMoney(result.amount)}\n*New balance:* ${formatMoney(result.newBalance)}`;
+        message = `The teller felt genuinely sorry for you. That's never happened before.\n\n*Received:* ${formatMoney(result.amount)}\n*New balance:* ${formatMoney(result.newBalance)}`;
         break;
       default:
         message = `Something happened. You got ${formatMoney(result.amount)}.\n*New balance:* ${formatMoney(result.newBalance)}`;
     }
 
-    if (result.type !== 'denied') {
+    if (result.outcomeType !== 'denied') {
       await notifyBalanceChange(client, convex, api, userId, 'Begging', result.amount, result.newBalance);
     }
 
@@ -1295,6 +1295,130 @@ function registerBankingCommands(app, convex, api) {
       text: `You've been charged *${formatMoney(fee)}* for: _${desc}_\n\nNew balance: ${formatMoney(result)}\n\nYou literally asked for this.`,
     });
   });
+
+  // /south-leaderboard - See the richest or poorest users
+  app.command('/south-leaderboard', async ({ command, ack, respond }) => {
+    await ack();
+    const sub = (command.text.trim().toLowerCase()) || 'top';
+
+    if (sub === 'bottom') {
+      const results = await convex.query(api.leaderboard.bottom);
+      if (results.length === 0) {
+        await respond({ response_type: 'ephemeral', text: "No accounts exist yet. Somehow." });
+        return;
+      }
+      const lines = results.map(r => `${r.rank}. <@${r.userId}> — ${formatMoney(r.balance)} (${r.status})`).join('\n');
+      await respond({
+        response_type: 'in_channel',
+        text: `*THE WALL OF SHAME*\n\n${lines}\n\n_These people owe more than they own. Inspirational._`,
+      });
+    } else {
+      const results = await convex.query(api.leaderboard.top);
+      if (results.length === 0) {
+        await respond({ response_type: 'ephemeral', text: "No accounts exist yet." });
+        return;
+      }
+      const lines = results.map(r => `${r.rank}. <@${r.userId}> — ${formatMoney(r.balance)} (${r.status})`).join('\n');
+      await respond({
+        response_type: 'in_channel',
+        text: `*SOUTHBAG RICH LIST*\n\n${lines}\n\n_Wealth is temporary. Southbag fees are forever._`,
+      });
+    }
+  });
+
+  // /south-invest - Invest money for potential returns
+  app.command('/south-invest', async ({ command, ack, respond, client }) => {
+    await ack();
+    const userId = command.user_id;
+    const sub = command.text.trim().split(/\s+/)[0].toLowerCase();
+
+    if (sub === 'collect') {
+      const result = await convex.mutation(api.invest.collect, { userId });
+      if (result.error === 'no_investment') { await respond({ response_type: 'ephemeral', text: "You have no active investment to collect." }); return; }
+      if (result.error === 'not_mature') { await respond({ response_type: 'ephemeral', text: `Your investment hasn't matured yet. ${result.remaining} minutes remaining.` }); return; }
+      if (result.error === 'no_account') { await respond({ response_type: 'ephemeral', text: "No account. `/south-open-account` first." }); return; }
+      if (result.error) { await respond({ response_type: 'ephemeral', text: `Error: ${result.error}` }); return; }
+
+      await notifyBalanceChange(client, convex, api, userId, `Investment ${result.status}`, result.payout, result.newBalance);
+
+      let message;
+      if (result.multiplier === 0) {
+        message = `*TOTAL LOSS*\n\nYour investment of ${formatMoney(result.invested)} is gone. All of it. The market ate it.\n\nNew balance: ${formatMoney(result.newBalance)}`;
+      } else if (result.profit < 0) {
+        message = `*PARTIAL LOSS*\n\nInvested: ${formatMoney(result.invested)}\nReturned: ${formatMoney(result.payout)} (${result.multiplier}x)\nLoss: ${formatMoney(Math.abs(result.profit))}\n\nNew balance: ${formatMoney(result.newBalance)}\n\n_The market giveth, and the market taketh._`;
+      } else {
+        message = `*INVESTMENT MATURED*\n\nInvested: ${formatMoney(result.invested)}\nReturned: ${formatMoney(result.payout)} (${result.multiplier}x)\nProfit: +${formatMoney(result.profit)}\n\nNew balance: ${formatMoney(result.newBalance)}\n\n_Don't get used to it._`;
+      }
+
+      await respond({ response_type: 'ephemeral', text: message });
+      return;
+    }
+
+    if (sub === 'status') {
+      const result = await convex.query(api.invest.status, { userId });
+      if (!result) {
+        await respond({ response_type: 'ephemeral', text: "No active investment. Use `/south-invest <amount>` to start one." });
+        return;
+      }
+      await respond({
+        response_type: 'ephemeral',
+        text: `*Active Investment*\n\nAmount: ${formatMoney(result.amount)}\nMatures in: ${result.remaining} minutes\n\n_The market is doing... things._`,
+      });
+      return;
+    }
+
+    const amount = parseFloat(sub);
+    if (isNaN(amount) || amount <= 0) {
+      await respond({ response_type: 'ephemeral', text: "Usage: `/south-invest <amount>` | `/south-invest collect` | `/south-invest status`" });
+      return;
+    }
+
+    const result = await convex.mutation(api.invest.invest, { userId, amount });
+    if (result.error === 'no_account') { await respond({ response_type: 'ephemeral', text: "No account. `/south-open-account` first." }); return; }
+    if (result.error === 'frozen') { await respond({ response_type: 'ephemeral', text: "Account frozen. No investing for you." }); return; }
+    if (result.error === 'insufficient') { await respond({ response_type: 'ephemeral', text: `You only have ${formatMoney(result.balance)}. Invest less.` }); return; }
+    if (result.error === 'already_invested') { await respond({ response_type: 'ephemeral', text: "You already have an active investment. `/south-invest collect` or `/south-invest status` first." }); return; }
+    if (result.error) { await respond({ response_type: 'ephemeral', text: `Error: ${result.error}` }); return; }
+
+    await notifyBalanceChange(client, convex, api, userId, 'Investment deposit', -amount, result.newBalance);
+
+    await respond({
+      response_type: 'ephemeral',
+      text: `*Investment placed*\n\nDeposited: ${formatMoney(amount)}\nManagement fee: ${formatMoney(result.fee)} (5%)\nActual invested: ${formatMoney(result.invested)}\nNew balance: ${formatMoney(result.newBalance)}\n\nCollect in 1 hour with \`/south-invest collect\`.\n\n_Past performance does not predict future results. Neither does anything else at Southbag._`,
+    });
+  });
+
+  // /south-audit - Pay to reveal someone's financial details
+  app.command('/south-audit', async ({ command, ack, respond, client }) => {
+    await ack();
+    const userId = command.user_id;
+    const text = command.text.trim();
+    const targetMatch = text.match(/<@(\w+)(\|[^>]*)?>/);
+
+    if (!targetMatch) {
+      await respond({ response_type: 'ephemeral', text: "Usage: `/south-audit @user` — Costs $0.25 to peek at someone's finances." });
+      return;
+    }
+
+    const targetId = targetMatch[1];
+    const result = await convex.mutation(api.audit.audit, { userId, targetId });
+
+    if (result.error === 'self_audit') { await respond({ response_type: 'ephemeral', text: "You already know your own finances. Use `/south-balance`." }); return; }
+    if (result.error === 'no_account') { await respond({ response_type: 'ephemeral', text: "No account. `/south-open-account` first." }); return; }
+    if (result.error === 'insufficient') { await respond({ response_type: 'ephemeral', text: `You need $0.25 for the audit fee. You only have ${formatMoney(result.balance)}.` }); return; }
+    if (result.error === 'no_target') { await respond({ response_type: 'ephemeral', text: "That user doesn't have a Southbag account." }); return; }
+    if (result.error) { await respond({ response_type: 'ephemeral', text: `Error: ${result.error}` }); return; }
+
+    await notifyBalanceChange(client, convex, api, userId, 'Audit fee', -result.fee, result.auditorNewBalance);
+
+    const t = result.target;
+    const txLines = t.recentTransactions.map(tx => `  ${tx.type}: ${tx.amount >= 0 ? '+' : ''}${formatMoney(Math.abs(tx.amount))} — ${tx.description}`).join('\n');
+
+    await respond({
+      response_type: 'in_channel',
+      text: `*FINANCIAL AUDIT: <@${t.userId}>*\n\nBalance: ${formatMoney(t.balance)}\nStatus: ${t.status}\nTier: ${t.tier}\nAccount: \`${t.accountNumber}\`\n\n*Recent transactions:*\n${txLines}\n\n_Audit fee: ${formatMoney(result.fee)} charged to <@${userId}>. Privacy is a myth._`,
+    });
+  });
 }
 
 async function notifyBalanceChange(client, convex, api, userId, description, amount, newBalance) {
@@ -1303,10 +1427,9 @@ async function notifyBalanceChange(client, convex, api, userId, description, amo
     if (notifyUsers.length === 0) return;
 
     const sign = amount >= 0 ? '+' : '';
-    const emoji = amount >= 0 ? ':chart_with_upwards_trend:' : ':chart_with_downwards_trend:';
     await client.chat.postMessage({
       channel: userId,
-      text: `${emoji} *Balance Update*\n${description}: ${sign}${formatMoney(Math.abs(amount))}\nNew balance: ${formatMoney(newBalance)}`,
+      text: `*Balance Update*\n${description}: ${sign}${formatMoney(Math.abs(amount))}\nNew balance: ${formatMoney(newBalance)}`,
     });
   } catch (e) {}
 }
