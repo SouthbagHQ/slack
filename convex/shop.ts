@@ -66,6 +66,49 @@ export const buyItem = mutation({
   },
 });
 
+export const buyMultipleItems = mutation({
+  args: { userId: v.string(), itemId: v.string(), quantity: v.number() },
+  handler: async (ctx, args) => {
+    if (args.quantity < 1 || args.quantity > 99 || !Number.isInteger(args.quantity)) {
+      return { error: "invalid_quantity" };
+    }
+
+    const item = SHOP_ITEMS[args.itemId];
+    if (!item) return { error: "invalid_item" };
+
+    const account = await ctx.db
+      .query("accounts")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+    if (!account) return { error: "no_account" };
+    if (account.status === "frozen") return { error: "frozen" };
+
+    const totalCost = Math.round(item.price * args.quantity * 100) / 100;
+    if (account.balance < totalCost) {
+      return { error: "insufficient", balance: account.balance, price: totalCost, itemName: item.name };
+    }
+
+    const now = Date.now();
+    const newBalance = Math.round((account.balance - totalCost) * 100) / 100;
+    const inventory = account.inventory || [];
+    for (let i = 0; i < args.quantity; i++) {
+      inventory.push({ itemId: args.itemId, name: item.name, boughtAt: now + i });
+    }
+
+    await ctx.db.patch(account._id, { balance: newBalance, inventory });
+    await ctx.db.insert("transactions", {
+      userId: args.userId,
+      type: "withdrawal",
+      amount: -totalCost,
+      description: `Shop purchase: ${item.name} x${args.quantity}`,
+      balanceAfter: newBalance,
+      createdAt: now,
+    });
+
+    return { success: true, itemName: item.name, quantity: args.quantity, totalCost, newBalance };
+  },
+});
+
 export const giftItem = mutation({
   args: { senderId: v.string(), recipientId: v.string(), itemId: v.string() },
   handler: async (ctx, args) => {
@@ -110,5 +153,39 @@ export const giftItem = mutation({
     });
 
     return { success: true, itemName: item.name, price: item.price, senderNewBalance: newBalance };
+  },
+});
+
+export const giftToKevin = mutation({
+  args: { userId: v.string(), itemId: v.string() },
+  handler: async (ctx, args) => {
+    const item = SHOP_ITEMS[args.itemId];
+    if (!item) return { error: "invalid_item" };
+
+    const account = await ctx.db
+      .query("accounts")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+    if (!account) return { error: "no_account" };
+    if (account.status === "frozen") return { error: "frozen" };
+
+    if (account.balance < item.price) {
+      return { error: "insufficient", balance: account.balance, price: item.price, itemName: item.name };
+    }
+
+    const now = Date.now();
+    const newBalance = Math.round((account.balance - item.price) * 100) / 100;
+
+    await ctx.db.patch(account._id, { balance: newBalance });
+    await ctx.db.insert("transactions", {
+      userId: args.userId,
+      type: "withdrawal",
+      amount: -item.price,
+      description: `Tribute to Kevin: ${item.name}`,
+      balanceAfter: newBalance,
+      createdAt: now,
+    });
+
+    return { success: true, itemName: item.name, price: item.price, newBalance };
   },
 });

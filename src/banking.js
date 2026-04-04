@@ -1566,7 +1566,9 @@ function registerBankingCommands(app, convex, api) {
           action_id: `shop_action_${item.id}`,
           options: [
             { text: { type: 'plain_text', text: 'Buy' }, value: `buy_${item.id}` },
+            { text: { type: 'plain_text', text: 'Buy Multiple' }, value: `buymulti_${item.id}` },
             { text: { type: 'plain_text', text: 'Gift to someone' }, value: `gift_${item.id}` },
+            { text: { type: 'plain_text', text: 'Gift to Kevin' }, value: `giftkevin_${item.id}` },
           ],
         },
       });

@@ -10,6 +10,7 @@ const { registerAppHome } = require('./home');
 
 const ALLOWED_CHANNEL = 'C0AH7GB4V6X';
 
+
 const convex = new ConvexHttpClient(process.env.CONVEX_URL);
 
 const app = new App({
@@ -258,16 +259,14 @@ app.action(/^shop_action_/, async ({ action, ack, body, client }) => {
     if (!item) return;
 
     try {
-      await client.views.open({
-        trigger_id: body.trigger_id,
-        view: {
-          type: 'modal',
-          callback_id: 'gift_modal',
-          private_metadata: JSON.stringify({ itemId, senderId: userId }),
-          title: { type: 'plain_text', text: 'Gift an Item' },
-          submit: { type: 'plain_text', text: 'Send Gift' },
-          close: { type: 'plain_text', text: 'Nevermind' },
-          blocks: [
+      const giftView = {
+        type: 'modal',
+        callback_id: 'gift_modal',
+        private_metadata: JSON.stringify({ itemId, senderId: userId }),
+        title: { type: 'plain_text', text: 'Gift an Item' },
+        submit: { type: 'plain_text', text: 'Send Gift' },
+        close: { type: 'plain_text', text: 'Nevermind' },
+        blocks: [
             {
               type: 'section',
               text: { type: 'mrkdwn', text: `*${item.name}* — $${item.price.toFixed(2)}\n_This will be deducted from your balance._` },
@@ -294,10 +293,95 @@ app.action(/^shop_action_/, async ({ action, ack, body, client }) => {
               label: { type: 'plain_text', text: 'Message' },
             },
           ],
-        },
-      });
+        };
+
+      // If triggered from inside a modal, push onto the stack; otherwise open new
+      if (body.view) {
+        await client.views.push({ trigger_id: body.trigger_id, view: giftView });
+      } else {
+        await client.views.open({ trigger_id: body.trigger_id, view: giftView });
+      }
     } catch (e) {
       console.error('Error opening gift modal:', e);
+    }
+  } else if (actionType === 'buymulti') {
+    const item = SHOP_ITEMS[itemId];
+    if (!item) return;
+
+    try {
+      const buyMultiView = {
+        type: 'modal',
+        callback_id: 'buy_multi_modal',
+        private_metadata: JSON.stringify({ itemId, userId }),
+        title: { type: 'plain_text', text: 'Buy Multiple' },
+        submit: { type: 'plain_text', text: 'Buy' },
+        close: { type: 'plain_text', text: 'Nevermind' },
+        blocks: [
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: `*${item.name}* — $${item.price.toFixed(2)} each\n_Why buy one when you can regret buying many?_` },
+          },
+          {
+            type: 'input',
+            block_id: 'quantity_block',
+            element: {
+              type: 'number_input',
+              action_id: 'quantity',
+              is_decimal_allowed: false,
+              min_value: '1',
+              max_value: '99',
+              placeholder: { type: 'plain_text', text: 'How many?' },
+            },
+            label: { type: 'plain_text', text: 'Quantity' },
+          },
+        ],
+      };
+
+      if (body.view) {
+        await client.views.push({ trigger_id: body.trigger_id, view: buyMultiView });
+      } else {
+        await client.views.open({ trigger_id: body.trigger_id, view: buyMultiView });
+      }
+    } catch (e) {
+      console.error('Error opening buy multiple modal:', e);
+    }
+  } else if (actionType === 'giftkevin') {
+    const item = SHOP_ITEMS[itemId];
+    if (!item) return;
+
+    const result = await convex.mutation(api.shop.giftToKevin, { userId, itemId });
+
+    if (result.error === 'insufficient') {
+      await client.chat.postEphemeral({ channel: userId, user: userId, text: `You can't afford to tribute Kevin. You have $${result.balance.toFixed(2)} and this costs $${result.price.toFixed(2)}. He'll remember this.` });
+      return;
+    }
+    if (result.error === 'frozen') {
+      await client.chat.postEphemeral({ channel: userId, user: userId, text: "Your account is frozen. Kevin does not accept gifts from the frozen." });
+      return;
+    }
+    if (result.error) {
+      await client.chat.postEphemeral({ channel: userId, user: userId, text: `Error: ${result.error}` });
+      return;
+    }
+
+    await notifyBalanceChange(client, convex, api, userId, `Tribute to Kevin: ${result.itemName}`, -result.price, result.newBalance);
+
+    const kevinReactions = [
+      "Kevin has acknowledged your offering. He did not smile.",
+      "Kevin took it without a word. This is the best possible outcome.",
+      "Kevin looked at it, looked at you, and walked away. Progress.",
+      "Kevin's assistant placed it on The Pile. You don't ask about The Pile.",
+      "Kevin nodded. You have never seen Kevin nod before. You feel strange.",
+    ];
+    const reaction = kevinReactions[Math.floor(Math.random() * kevinReactions.length)];
+
+    try {
+      await client.chat.postMessage({
+        channel: ALLOWED_CHANNEL,
+        text: `<@${userId}> has offered a *${result.itemName}* as tribute to Kevin.\n\n_${reaction}_`,
+      });
+    } catch (e) {
+      console.error('Error posting Kevin tribute announcement:', e);
     }
   }
 });
@@ -343,6 +427,36 @@ app.view('gift_modal', async ({ view, ack, client }) => {
   } catch (e) {
     console.error('Error posting gift announcement:', e);
   }
+});
+
+// Handle buy multiple modal submission
+app.view('buy_multi_modal', async ({ view, ack, client }) => {
+  const { itemId, userId } = JSON.parse(view.private_metadata);
+  const quantity = parseInt(view.state.values.quantity_block.quantity.value, 10);
+
+  const result = await convex.mutation(api.shop.buyMultipleItems, { userId, itemId, quantity });
+
+  if (result.error === 'insufficient') {
+    await ack({ response_action: 'errors', errors: { quantity_block: `You can't afford ${quantity}x ($${result.price.toFixed(2)} total). Balance: $${result.balance.toFixed(2)}.` } });
+    return;
+  }
+  if (result.error === 'frozen') {
+    await ack({ response_action: 'errors', errors: { quantity_block: "Your account is frozen." } });
+    return;
+  }
+  if (result.error) {
+    await ack({ response_action: 'errors', errors: { quantity_block: `Error: ${result.error}` } });
+    return;
+  }
+
+  await ack();
+
+  await notifyBalanceChange(client, convex, api, userId, `Shop: ${result.itemName} x${result.quantity}`, -result.totalCost, result.newBalance);
+  await client.chat.postEphemeral({
+    channel: userId,
+    user: userId,
+    text: `You bought *${result.quantity}x ${result.itemName}* for $${result.totalCost.toFixed(2)}.\nNew balance: $${result.newBalance.toFixed(2)}\n\n_${result.quantity} of the same thing. Bold strategy._`,
+  });
 });
 
 // --- Start ---
