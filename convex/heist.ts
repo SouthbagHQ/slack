@@ -8,8 +8,8 @@ export const start = mutation({
       .query("accounts")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
-    if (!account) return { error: "no_account" };
-    if (account.status === "frozen") return { error: "frozen" };
+    if (!account) return { error: "no_account" as const };
+    if (account.status === "frozen") return { error: "frozen" as const };
 
     // Check no active heist in this channel
     const activeHeist = await ctx.db
@@ -17,7 +17,7 @@ export const start = mutation({
       .withIndex("by_channel", (q) => q.eq("channelId", args.channelId))
       .filter((q) => q.eq(q.field("status"), "recruiting"))
       .first();
-    if (activeHeist) return { error: "heist_active" };
+    if (activeHeist) return { error: "heist_active" as const };
 
     const now = Date.now();
     const fee = 0.05;
@@ -53,16 +53,16 @@ export const join = mutation({
       .withIndex("by_channel", (q) => q.eq("channelId", args.channelId))
       .filter((q) => q.eq(q.field("status"), "recruiting"))
       .first();
-    if (!heist) return { error: "no_heist" };
+    if (!heist) return { error: "no_heist" as const };
 
     const account = await ctx.db
       .query("accounts")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
-    if (!account) return { error: "no_account" };
+    if (!account) return { error: "no_account" as const };
 
-    if (heist.participants.includes(args.userId)) return { error: "already_joined" };
-    if (heist.participants.length >= 5) return { error: "heist_full" };
+    if (heist.participants.includes(args.userId)) return { error: "already_joined" as const };
+    if (heist.participants.length >= 5) return { error: "heist_full" as const };
 
     const now = Date.now();
     const fee = 0.03;
@@ -93,9 +93,9 @@ export const execute = mutation({
       .withIndex("by_channel", (q) => q.eq("channelId", args.channelId))
       .filter((q) => q.eq(q.field("status"), "recruiting"))
       .first();
-    if (!heist) return { error: "no_heist" };
-    if (heist.startedBy !== args.userId) return { error: "not_starter" };
-    if (heist.participants.length < 2) return { error: "not_enough" };
+    if (!heist) return { error: "no_heist" as const };
+    if (heist.startedBy !== args.userId) return { error: "not_starter" as const };
+    if (heist.participants.length < 2) return { error: "not_enough" as const };
 
     const now = Date.now();
     const successChance = Math.min(0.30 + 0.10 * heist.participants.length, 0.80);
@@ -105,6 +105,8 @@ export const execute = mutation({
       const vaultPayout = Math.round((Math.random() * 4.50 + 0.50) * 100) / 100;
       const afterInsurance = Math.round(vaultPayout * 0.75 * 100) / 100;
       const individualShare = Math.round((afterInsurance / heist.participants.length) * 100) / 100;
+
+      const participantDetails: { userId: string; share: number; newBalance: number }[] = [];
 
       for (const participantId of heist.participants) {
         const acc = await ctx.db
@@ -122,33 +124,19 @@ export const execute = mutation({
           balanceAfter: newBal,
           createdAt: now,
         });
+        participantDetails.push({ userId: participantId, share: individualShare, newBalance: newBal });
       }
 
       await ctx.db.patch(heist._id, { status: "completed", completedAt: now });
 
-      const participantDetails: { userId: string; share: number; newBalance: number }[] = [];
-      for (const participantId of heist.participants) {
-        const acc = await ctx.db
-          .query("accounts")
-          .withIndex("by_user", (q) => q.eq("userId", participantId))
-          .first();
-        participantDetails.push({
-          userId: participantId,
-          share: individualShare,
-          newBalance: acc ? acc.balance : 0,
-        });
-      }
-
       return {
-        success: true,
+        success: true as const,
         totalPayout: afterInsurance,
-        insuranceDeductible: Math.round((vaultPayout * 0.25) * 100) / 100,
-        netPayout: afterInsurance,
-        individualShare,
         participants: participantDetails,
       };
     } else {
-      const fines: { userId: string; fine: number }[] = [];
+      const participantDetails: { userId: string; fine: number; newBalance: number }[] = [];
+
       for (const participantId of heist.participants) {
         const acc = await ctx.db
           .query("accounts")
@@ -166,27 +154,15 @@ export const execute = mutation({
           balanceAfter: newBal,
           createdAt: now,
         });
-        fines.push({ userId: participantId, fine });
+        participantDetails.push({ userId: participantId, fine, newBalance: newBal });
       }
 
       await ctx.db.patch(heist._id, { status: "failed", completedAt: now });
 
-      const failedParticipants: { userId: string; fine: number; newBalance: number }[] = [];
-      for (const f of fines) {
-        const acc = await ctx.db
-          .query("accounts")
-          .withIndex("by_user", (q) => q.eq("userId", f.userId))
-          .first();
-        failedParticipants.push({
-          userId: f.userId,
-          fine: f.fine,
-          newBalance: acc ? acc.balance : 0,
-        });
-      }
-
       return {
-        success: false,
-        participants: failedParticipants,
+        success: false as const,
+        totalPayout: 0,
+        participants: participantDetails,
       };
     }
   },
