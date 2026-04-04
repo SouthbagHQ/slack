@@ -2,22 +2,22 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 const JOB_LISTINGS = [
-  { title: "Southbag Branch Greeter", salary: 1 },
-  { title: "ATM Apology Writer", salary: 1.5 },
-  { title: "Fee Explanation Specialist", salary: 0.04 },
-  { title: "Complaint Ignorer", salary: 0.06 },
-  { title: "Password Reset Denier", salary: 2.02 },
-  { title: "Queue Extension Coordinator", salary: 1.07 },
-  { title: "Hold Music DJ", salary: 6 },
-  { title: "Overdraft Celebration Planner", salary: 0.05 },
-  { title: "Terms & Conditions Lengthener", salary: 0.08 },
-  { title: "Customer Disappointment Analyst", salary: 0.03 },
-  { title: "Lobby Floor Starer", salary: 0.01 },
-  { title: "Senior Vice President of Nothing", salary: 100 },
-  { title: "Chief Vibes Officer", salary: 9 },
-  { title: "Intern (Unpaid)", salary: 0.0 },
-  { title: "Executive Paper Shredder", salary: 0.06 },
-  { title: "Vibe Coder" , salary: 2.0 },
+  { title: "Southbag Branch Greeter", salary: 15 },
+  { title: "ATM Apology Writer", salary: 22 },
+  { title: "Fee Explanation Specialist", salary: 8 },
+  { title: "Complaint Ignorer", salary: 12 },
+  { title: "Password Reset Denier", salary: 30 },
+  { title: "Queue Extension Coordinator", salary: 18 },
+  { title: "Hold Music DJ", salary: 75 },
+  { title: "Overdraft Celebration Planner", salary: 10 },
+  { title: "Terms & Conditions Lengthener", salary: 14 },
+  { title: "Customer Disappointment Analyst", salary: 6 },
+  { title: "Lobby Floor Starer", salary: 3 },
+  { title: "Senior Vice President of Nothing", salary: 500 },
+  { title: "Chief Vibes Officer", salary: 120 },
+  { title: "Intern (Unpaid)", salary: 0.01 },
+  { title: "Executive Paper Shredder", salary: 11 },
+  { title: "Vibe Coder", salary: 45 },
 ];
 
 export const getJob = query({
@@ -101,18 +101,36 @@ export const work = mutation({
     const roll = Math.random();
     let pay = job.salary;
     let event = "Completed a shift";
+    let bonusType: string | null = null;
 
-    if (roll < 0.10) {
+    if (roll < 0.03) {
+      // Kevin's approval bonus
+      pay = Math.round(pay * 5 * 100) / 100;
+      event = "Kevin personally approved your overtime";
+      bonusType = "kevin";
+    } else if (roll < 0.10) {
       // Overtime bonus
       pay = Math.round(pay * 2.5 * 100) / 100;
       event = "Overtime bonus shift";
-    } else if (roll < 0.20) {
+      bonusType = "overtime";
+    } else if (roll < 0.18) {
+      // Performance bonus
+      pay = Math.round(pay * 1.75 * 100) / 100;
+      event = "Performance bonus (someone noticed you exist)";
+      bonusType = "performance";
+    } else if (roll < 0.23) {
+      // Tips
+      const tip = Math.round((Math.random() * pay * 0.5 + 1) * 100) / 100;
+      pay = Math.round((pay + tip) * 100) / 100;
+      event = `Shift + tips ($${tip.toFixed(2)})`;
+      bonusType = "tips";
+    } else if (roll < 0.33) {
       // Docked pay
       pay = Math.round(pay * 0.3 * 100) / 100;
       event = "Pay docked (bad attitude)";
-    } else if (roll < 0.25) {
+    } else if (roll < 0.38) {
       // Workplace incident — you owe money
-      const fine = Math.round((Math.random() * 0.10 + 0.01) * 100) / 100;
+      const fine = Math.round((Math.random() * 5 + 1) * 100) / 100;
       const fineBalance = Math.round((account.balance - fine) * 100) / 100;
       await ctx.db.patch(account._id, { balance: fineBalance });
       await ctx.db.patch(job._id, { lastWorkedAt: now });
@@ -152,7 +170,7 @@ export const work = mutation({
       createdAt: now + 1,
     });
 
-    return { success: true, event, gross: pay, tax, net, newBalance, title: job.title };
+    return { success: true, event, gross: pay, tax, net, newBalance, title: job.title, bonusType };
   },
 });
 

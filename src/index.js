@@ -81,6 +81,20 @@ async function handleMessage({ event, client }) {
     }
   } catch (e) {}
 
+  // Fetch inventory context
+  let inventoryContext = '';
+  try {
+    const inventory = await convex.query(api.shop.getInventory, { userId });
+    if (inventory && inventory.length > 0) {
+      const itemNames = inventory.map(i => i.name);
+      const hasBlahaj = itemNames.includes('Blahaj');
+      inventoryContext = `\n[USER INVENTORY: ${itemNames.join(', ')}]`;
+      if (hasBlahaj) {
+        inventoryContext += '\n[WARNING: THIS USER OWNS A BLAHAJ. You are deeply distressed about this. Kevin must not find out. Express visible discomfort whenever they mention it or anything shark-related. You are conflicted because you secretly love blahajs but Kevin has forbidden them.]';
+      }
+    }
+  } catch (e) {}
+
   // Store user message
   await convex.mutation(api.messages.store, {
     channelId,
@@ -96,7 +110,7 @@ async function handleMessage({ event, client }) {
   const recentHistory = history.slice(-20);
 
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT + profileContext + bankingContext },
+    { role: 'system', content: SYSTEM_PROMPT + profileContext + bankingContext + inventoryContext },
     ...recentHistory.map((msg) => ({ role: msg.role, content: msg.content })),
   ];
 
@@ -176,6 +190,160 @@ const boltApp = {
   event: () => {},
 };
 registerBankingCommands(boltApp, convex, api);
+
+// --- Shop interaction handlers ---
+const SHOP_ITEMS = {
+  blahaj: { name: 'Blahaj', price: 49.99 },
+  fee_insurance: { name: 'Fee Insurance', price: 99.99 },
+  kevins_briefcase: { name: "Kevin's Briefcase", price: 250.00 },
+  office_light_bulb: { name: 'Office Light Bulb', price: 5.00 },
+  incident_report: { name: '2019 Incident Report', price: 500.00 },
+  southbag_mug: { name: 'Southbag Mug', price: 12.50 },
+  kevins_parking_spot: { name: "Kevin's Parking Spot", price: 1000.00 },
+};
+
+const GIFT_ANNOUNCEMENTS = {
+  blahaj: "Southbag Support has gone offline.",
+  fee_insurance: "Southbag Support is recalculating your fees. Nervously.",
+  kevins_briefcase: "Kevin would like a word.",
+  office_light_bulb: "The flickering light in aisle 3 has been claimed.",
+  incident_report: "Legal has been notified. Again.",
+  southbag_mug: "HR is pretending not to notice.",
+  kevins_parking_spot: "Kevin is circling the parking lot. He looks upset.",
+};
+
+// Handle overflow menu actions from shop
+app.action(/^shop_action_/, async ({ action, ack, body, client }) => {
+  await ack();
+  const userId = body.user.id;
+  const value = action.selected_option.value;
+  const [actionType, ...itemParts] = value.split('_');
+  const itemId = actionType === 'buy' ? itemParts.join('_') : itemParts.join('_');
+
+  if (actionType === 'buy') {
+    const result = await convex.mutation(api.shop.buyItem, { userId, itemId });
+
+    if (result.error === 'no_account') {
+      await client.chat.postEphemeral({ channel: userId, user: userId, text: "No account. How did you even get here?" });
+      return;
+    }
+    if (result.error === 'insufficient') {
+      const roasts = [
+        `You have $${result.balance.toFixed(2)} and this costs $${result.price.toFixed(2)}. Do the math. Actually, don't. You clearly can't.`,
+        `Insufficient funds for ${result.itemName}. Have you tried not being broke?`,
+        `$${result.balance.toFixed(2)} in your account and you're trying to buy a $${result.price.toFixed(2)} item. The audacity.`,
+        `You can't afford ${result.itemName}. Maybe try /south-beg first. It suits you.`,
+      ];
+      await client.chat.postEphemeral({ channel: userId, user: userId, text: roasts[Math.floor(Math.random() * roasts.length)] });
+      return;
+    }
+    if (result.error === 'frozen') {
+      await client.chat.postEphemeral({ channel: userId, user: userId, text: "Your account is frozen. No shopping sprees for you." });
+      return;
+    }
+    if (result.error) {
+      await client.chat.postEphemeral({ channel: userId, user: userId, text: `Error: ${result.error}` });
+      return;
+    }
+
+    await notifyBalanceChange(client, convex, api, userId, `Shop: ${result.itemName}`, -result.price, result.newBalance);
+    await client.chat.postEphemeral({
+      channel: userId,
+      user: userId,
+      text: `You bought *${result.itemName}* for $${result.price.toFixed(2)}.\nNew balance: $${result.newBalance.toFixed(2)}\n\n_Check /south-inventory to admire your questionable purchases._`,
+    });
+  } else if (actionType === 'gift') {
+    // Open gift modal with user picker
+    const item = SHOP_ITEMS[itemId];
+    if (!item) return;
+
+    try {
+      await client.views.open({
+        trigger_id: body.trigger_id,
+        view: {
+          type: 'modal',
+          callback_id: 'gift_modal',
+          private_metadata: JSON.stringify({ itemId, senderId: userId }),
+          title: { type: 'plain_text', text: 'Gift an Item' },
+          submit: { type: 'plain_text', text: 'Send Gift' },
+          close: { type: 'plain_text', text: 'Nevermind' },
+          blocks: [
+            {
+              type: 'section',
+              text: { type: 'mrkdwn', text: `*${item.name}* — $${item.price.toFixed(2)}\n_This will be deducted from your balance._` },
+            },
+            {
+              type: 'input',
+              block_id: 'recipient_block',
+              element: {
+                type: 'users_select',
+                action_id: 'recipient',
+                placeholder: { type: 'plain_text', text: 'Pick a victim' },
+              },
+              label: { type: 'plain_text', text: 'Recipient' },
+            },
+            {
+              type: 'input',
+              block_id: 'message_block',
+              optional: true,
+              element: {
+                type: 'plain_text_input',
+                action_id: 'gift_message',
+                placeholder: { type: 'plain_text', text: 'Optional message (they probably won\'t appreciate it)' },
+              },
+              label: { type: 'plain_text', text: 'Message' },
+            },
+          ],
+        },
+      });
+    } catch (e) {
+      console.error('Error opening gift modal:', e);
+    }
+  }
+});
+
+// Handle gift modal submission
+app.view('gift_modal', async ({ view, ack, client }) => {
+  const { itemId, senderId } = JSON.parse(view.private_metadata);
+  const recipientId = view.state.values.recipient_block.recipient.selected_user;
+  const giftMessage = view.state.values.message_block?.gift_message?.value || '';
+
+  const result = await convex.mutation(api.shop.giftItem, { senderId, recipientId, itemId });
+
+  if (result.error === 'self_gift') {
+    await ack({ response_action: 'errors', errors: { recipient_block: "You can't gift yourself. That's just buying with extra steps." } });
+    return;
+  }
+  if (result.error === 'no_recipient') {
+    await ack({ response_action: 'errors', errors: { recipient_block: "That user doesn't have a Southbag account." } });
+    return;
+  }
+  if (result.error === 'insufficient') {
+    await ack({ response_action: 'errors', errors: { recipient_block: `You can't afford this ($${result.price.toFixed(2)}). Balance: $${result.balance.toFixed(2)}.` } });
+    return;
+  }
+  if (result.error) {
+    await ack({ response_action: 'errors', errors: { recipient_block: `Error: ${result.error}` } });
+    return;
+  }
+
+  await ack();
+
+  await notifyBalanceChange(client, convex, api, senderId, `Gift: ${result.itemName}`, -result.price, result.senderNewBalance);
+
+  const announcement = GIFT_ANNOUNCEMENTS[itemId] || 'Southbag Support has no comment.';
+  const msgLine = giftMessage ? `\n_"${giftMessage}"_` : '';
+
+  // Announce in the allowed channel
+  try {
+    await client.chat.postMessage({
+      channel: ALLOWED_CHANNEL,
+      text: `<@${senderId}> just gifted a *${result.itemName}* to <@${recipientId}>.${msgLine}\n\n_${announcement}_`,
+    });
+  } catch (e) {
+    console.error('Error posting gift announcement:', e);
+  }
+});
 
 // --- Start ---
 (async () => {

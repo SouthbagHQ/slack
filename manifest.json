@@ -157,6 +157,16 @@
         "description": "Pay $0.25 to expose someone's finances publicly",
         "usage_hint": "@user",
         "should_escape": true
+      },
+      {
+        "command": "/south-shop",
+        "description": "Browse the Southbag Gift Shop (all sales final)",
+        "should_escape": false
+      },
+      {
+        "command": "/south-inventory",
+        "description": "View your questionable purchases",
+        "should_escape": false
       }
     ]
   },

@@ -237,6 +237,7 @@ function buildHomeBlocks(account, job, loan, transactions, crypto, insurance) {
         '*Gambling:* `/south-coinflip` · `/south-slots` · `/south-gamble`',
         '*Crime:* `/south-rob` · `/south-heist`',
         '*Investing:* `/south-crypto` · `/south-upgrade`',
+        '*Shopping:* `/south-shop` · `/south-inventory`',
         '*Other:* `/south-gift` · `/south-insure` · `/south-loan` · `/south-mystery-fee`',
         '*Settings:* `/south-notifs`',
       ].join('\n'),

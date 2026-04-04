@@ -20,12 +20,12 @@ export const claim = mutation({
       return { error: "cooldown", remaining, message: `Try again in ${hours}h ${minutes}m` };
     }
 
-    // 5% chance of bonus day
-    const bonus = Math.random() < 0.05;
-    const multiplier = bonus ? 5 : 1;
+    // 8% chance of bonus day
+    const bonus = Math.random() < 0.08;
+    const multiplier = bonus ? 10 : 1;
 
-    // Random reward between $0.01 and $0.25
-    const baseReward = Math.round((Math.random() * 0.24 + 0.01) * 100) / 100;
+    // Random reward between $1.00 and $10.00
+    const baseReward = Math.round((Math.random() * 9 + 1) * 100) / 100;
     const reward = Math.round(baseReward * multiplier * 100) / 100;
     const fee = 0.005;
     const net = Math.round((reward - fee) * 100) / 100;

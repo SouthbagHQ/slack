@@ -19,6 +19,7 @@ export default defineSchema({
     status: v.string(), // "active" | "frozen" | "suspicious" | "vibes-based"
     notifications: v.optional(v.boolean()),
     tier: v.optional(v.string()),
+    inventory: v.optional(v.array(v.object({ itemId: v.string(), name: v.string(), boughtAt: v.number(), giftedBy: v.optional(v.string()) }))),
     lastDailyAt: v.optional(v.number()),
     lastBegAt: v.optional(v.number()),
     createdAt: v.number(),

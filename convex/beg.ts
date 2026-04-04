@@ -21,30 +21,30 @@ export const beg = mutation({
     let amount: number;
     let message: string;
 
-    if (roll < 0.50) {
-      // 50%: Denied
+    if (roll < 0.40) {
+      // 40%: Denied
       outcomeType = "denied";
       amount = 0;
       message = "$0.00. Southbag doesn't do charity.";
-    } else if (roll < 0.70) {
+    } else if (roll < 0.60) {
       // 20%: Tiny amount
       outcomeType = "tiny";
-      amount = Math.round((Math.random() * 0.009 + 0.001) * 1000) / 1000;
-      message = `You scraped $${amount.toFixed(3)} off the floor. Pathetic.`;
-    } else if (roll < 0.85) {
-      // 15%: Decent amount
+      amount = Math.round((Math.random() * 0.90 + 0.10) * 100) / 100;
+      message = `You scraped $${amount.toFixed(2)} off the floor. Pathetic.`;
+    } else if (roll < 0.80) {
+      // 20%: Decent amount
       outcomeType = "decent";
-      amount = Math.round((Math.random() * 0.04 + 0.01) * 100) / 100;
+      amount = Math.round((Math.random() * 4 + 1) * 100) / 100;
       message = `A teller tossed you $${amount.toFixed(2)} out of pity.`;
-    } else if (roll < 0.95) {
-      // 10%: Reverse beg — charged
+    } else if (roll < 0.92) {
+      // 12%: Reverse beg — charged
       outcomeType = "reverse";
-      amount = Math.round((Math.random() * 0.04 + 0.01) * 100) / 100;
+      amount = Math.round((Math.random() * 3 + 0.50) * 100) / 100;
       message = `Reverse beg! You got charged $${amount.toFixed(2)} for wasting their time.`;
     } else {
-      // 5%: Jackpot pity
+      // 8%: Jackpot pity
       outcomeType = "jackpot";
-      amount = Math.round((Math.random() * 0.40 + 0.10) * 100) / 100;
+      amount = Math.round((Math.random() * 20 + 5) * 100) / 100;
       message = `The teller felt sorry for you. Here's $${amount.toFixed(2)}.`;
     }
 

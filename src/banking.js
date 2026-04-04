@@ -591,24 +591,38 @@ function registerBankingCommands(app, convex, api) {
         text: `*Workplace Incident* at your ${result.title} job\n\nYou owe: ${formatMoney(Math.abs(result.pay))}\nNew balance: ${formatMoney(result.newBalance)}\n\n_Maybe don't touch the shredder next time._`,
       });
     } else {
+      const bonusMessages = {
+        kevin: "Kevin himself signed your paycheck. This has never happened before. Be afraid.",
+        overtime: "Extra hours, extra pay. Your social life sends its regards.",
+        performance: "Someone actually noticed your work. Mark this day on your calendar.",
+        tips: "A customer tipped you. They must be new here.",
+      };
+      const bonusMsg = result.bonusType ? `\n\n_${bonusMessages[result.bonusType] || ''}_` : '';
+
       await respond({
         response_type: 'ephemeral',
         blocks: [
           {
             type: 'header',
-            text: { type: 'plain_text', text: 'Shift Complete' },
+            text: { type: 'plain_text', text: result.bonusType ? 'Shift Complete — BONUS!' : 'Shift Complete' },
           },
           {
             type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `*Job:* ${result.title}\n*Event:* ${result.event}\n\n*Gross pay:* ${formatMoney(result.gross)}\n*Income tax (40%):* -${formatMoney(result.tax)}\n*Net pay:* ${formatMoney(result.net)}\n\n*New balance:* ${formatMoney(result.newBalance)}`,
-            },
+            fields: [
+              { type: 'mrkdwn', text: `*Job:*\n${result.title}` },
+              { type: 'mrkdwn', text: `*Event:*\n${result.event}` },
+              { type: 'mrkdwn', text: `*Gross Pay:*\n${formatMoney(result.gross)}` },
+              { type: 'mrkdwn', text: `*Tax (40%):*\n-${formatMoney(result.tax)}` },
+            ],
+          },
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: `*Net pay:* ${formatMoney(result.net)}\n*New balance:* ${formatMoney(result.newBalance)}${bonusMsg}` },
           },
           {
             type: 'context',
             elements: [
-              { type: 'mrkdwn', text: '_Another day, another fraction of a cent._' },
+              { type: 'mrkdwn', text: result.bonusType ? '_Even Southbag has good days. Rarely._' : '_Another day, another dollar. Minus 40% tax._' },
             ],
           },
         ],
@@ -630,7 +644,25 @@ function registerBankingCommands(app, convex, api) {
 
     await respond({
       response_type: 'ephemeral',
-      text: `You have quit your position as *${result.title}*.\n\nExit interview fee: -$0.05\n\n_Don't let the door hit you on the way out. Actually, do. It's funnier._`,
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: 'You Quit. Congratulations.' },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*Former position:* ${result.title}\n*Exit interview fee:* -$0.05\n\n_Don't let the door hit you on the way out. Actually, do. It's funnier._`,
+          },
+        },
+        {
+          type: 'context',
+          elements: [
+            { type: 'mrkdwn', text: '_Your desk has already been given to someone else. They seem happier._' },
+          ],
+        },
+      ],
     });
   });
 
@@ -655,12 +687,33 @@ function registerBankingCommands(app, convex, api) {
 
     await notifyBalanceChange(client, convex, api, userId, `Coinflip ${result.won ? 'win' : 'loss'}`, result.net, result.newBalance);
 
-    const emoji = '';
     await respond({
       response_type: 'ephemeral',
-      text: result.won
-        ? `${emoji} *${result.result.toUpperCase()}!* You called ${result.call} — you win!\n\nBet: ${formatMoney(result.bet)}\nPayout: ${formatMoney(result.payout)} _(1.8x — house takes its cut)_\nProfit: +${formatMoney(result.net)}\nNew balance: ${formatMoney(result.newBalance)}`
-        : `${emoji} *${result.result.toUpperCase()}!* You called ${result.call} — you lose.\n\nLost: ${formatMoney(result.bet)}\nNew balance: ${formatMoney(result.newBalance)}\n\n_The house always wins. Especially this house._`,
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: result.won ? 'Coinflip — You Win!' : 'Coinflip — You Lose.' },
+        },
+        {
+          type: 'section',
+          fields: [
+            { type: 'mrkdwn', text: `*Result:*\n${result.result.toUpperCase()}` },
+            { type: 'mrkdwn', text: `*Your Call:*\n${result.call}` },
+            { type: 'mrkdwn', text: `*Bet:*\n${formatMoney(result.bet)}` },
+            { type: 'mrkdwn', text: result.won ? `*Payout:*\n${formatMoney(result.payout)} (1.8x)` : `*Lost:*\n${formatMoney(result.bet)}` },
+          ],
+        },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: result.won ? `*Profit:* +${formatMoney(result.net)}\n*New balance:* ${formatMoney(result.newBalance)}` : `*New balance:* ${formatMoney(result.newBalance)}` },
+        },
+        {
+          type: 'context',
+          elements: [
+            { type: 'mrkdwn', text: result.won ? '_Lucky. Don\'t get used to it._' : '_The house always wins. Especially this house._' },
+          ],
+        },
+      ],
     });
   });
 
@@ -696,7 +749,33 @@ function registerBankingCommands(app, convex, api) {
 
     await respond({
       response_type: 'ephemeral',
-      text: `*[ ${result.reels.join(" | ")} ]*\n\n${outcomeText}\n\nNew balance: ${formatMoney(result.newBalance)}`,
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: 'Slot Machine' },
+        },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: `*[  ${result.reels.join("  |  ")}  ]*` },
+        },
+        {
+          type: 'section',
+          fields: [
+            { type: 'mrkdwn', text: `*Bet:*\n${formatMoney(result.bet)}` },
+            { type: 'mrkdwn', text: `*Result:*\n${outcomeText}` },
+          ],
+        },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: `*New balance:* ${formatMoney(result.newBalance)}` },
+        },
+        {
+          type: 'context',
+          elements: [
+            { type: 'mrkdwn', text: result.won ? '_The machine glares at you. It will remember this._' : '_Thank you for your contribution to the Southbag executive bonus pool._' },
+          ],
+        },
+      ],
     });
   });
 
@@ -731,7 +810,27 @@ function registerBankingCommands(app, convex, api) {
 
     await respond({
       response_type: 'ephemeral',
-      text: `${emoji} *${result.outcome}* ${result.multiplier > 0 ? `(${result.multiplier}x)` : ''}\n\nGame: ${game}\nBet: ${formatMoney(result.bet)}\n${result.won ? `Payout: ${formatMoney(result.payout)}\nProfit: +${formatMoney(result.net)}` : `Lost: ${formatMoney(Math.abs(result.net))}`}\n\nNew balance: ${formatMoney(result.newBalance)}\n\n${flavor}`,
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: `Card Game — ${result.outcome}` },
+        },
+        {
+          type: 'section',
+          fields: [
+            { type: 'mrkdwn', text: `*Game:*\n${game}` },
+            { type: 'mrkdwn', text: `*Bet:*\n${formatMoney(result.bet)}` },
+            { type: 'mrkdwn', text: result.won ? `*Payout:*\n${formatMoney(result.payout)} (${result.multiplier}x)` : `*Lost:*\n${formatMoney(Math.abs(result.net))}` },
+            { type: 'mrkdwn', text: `*Balance:*\n${formatMoney(result.newBalance)}` },
+          ],
+        },
+        {
+          type: 'context',
+          elements: [
+            { type: 'mrkdwn', text: flavor },
+          ],
+        },
+      ],
     });
   });
 
@@ -1417,6 +1516,151 @@ function registerBankingCommands(app, convex, api) {
     await respond({
       response_type: 'in_channel',
       text: `*FINANCIAL AUDIT: <@${t.userId}>*\n\nBalance: ${formatMoney(t.balance)}\nStatus: ${t.status}\nTier: ${t.tier}\nAccount: \`${t.accountNumber}\`\n\n*Recent transactions:*\n${txLines}\n\n_Audit fee: ${formatMoney(result.fee)} charged to <@${userId}>. Privacy is a myth._`,
+    });
+  });
+
+  // /south-shop - Open the shop modal
+  app.command('/south-shop', async ({ command, ack, respond, client }) => {
+    await ack();
+    const userId = command.user_id;
+
+    const account = await convex.query(api.accounts.getBalance, { userId });
+    if (!account) {
+      await respond({ response_type: 'ephemeral', text: "You don't have an account. Use `/south-open-account` first. Can't shop without money. Well, you can't shop WITH money either, but still." });
+      return;
+    }
+
+    const items = [
+      { id: 'blahaj', name: 'Blahaj', price: 49.99, desc: 'An IKEA shark. Southbag Support hates this. Buy it anyway.' },
+      { id: 'fee_insurance', name: 'Fee Insurance', price: 99.99, desc: 'Covers your next fee. Probably. No guarantees.' },
+      { id: 'kevins_briefcase', name: "Kevin's Briefcase", price: 250.00, desc: 'Contents unknown. Kevin is watching.' },
+      { id: 'office_light_bulb', name: 'Office Light Bulb', price: 5.00, desc: 'For the flickering light. You know the one.' },
+      { id: 'incident_report', name: '2019 Incident Report', price: 500.00, desc: 'Redacted. All of it. Worth every cent.' },
+      { id: 'southbag_mug', name: 'Southbag Mug', price: 12.50, desc: "Says 'I survived Southbag Support' on the side. The handle is broken." },
+      { id: 'kevins_parking_spot', name: "Kevin's Parking Spot", price: 1000.00, desc: "He doesn't know you have this. Yet." },
+    ];
+
+    const blocks = [
+      {
+        type: 'header',
+        text: { type: 'plain_text', text: 'Southbag Gift Shop' },
+      },
+      {
+        type: 'context',
+        elements: [
+          { type: 'mrkdwn', text: `_Your balance: ${formatMoney(account.balance)} — All sales are final. All items are questionable._` },
+        ],
+      },
+      { type: 'divider' },
+    ];
+
+    for (const item of items) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${item.name}* — ${formatMoney(item.price)}\n_${item.desc}_`,
+        },
+        accessory: {
+          type: 'overflow',
+          action_id: `shop_action_${item.id}`,
+          options: [
+            { text: { type: 'plain_text', text: 'Buy' }, value: `buy_${item.id}` },
+            { text: { type: 'plain_text', text: 'Gift to someone' }, value: `gift_${item.id}` },
+          ],
+        },
+      });
+    }
+
+    blocks.push({ type: 'divider' });
+    blocks.push({
+      type: 'context',
+      elements: [
+        { type: 'mrkdwn', text: '_Kevin does not endorse any of these products. Especially the shark._' },
+      ],
+    });
+
+    try {
+      await client.views.open({
+        trigger_id: command.trigger_id,
+        view: {
+          type: 'modal',
+          title: { type: 'plain_text', text: 'Southbag Gift Shop' },
+          close: { type: 'plain_text', text: 'Leave (coward)' },
+          blocks,
+        },
+      });
+    } catch (e) {
+      await respond({
+        response_type: 'ephemeral',
+        blocks,
+      });
+    }
+  });
+
+  // /south-inventory - View your inventory
+  app.command('/south-inventory', async ({ command, ack, respond }) => {
+    await ack();
+    const userId = command.user_id;
+
+    const inventory = await convex.query(api.shop.getInventory, { userId });
+    if (inventory === null) {
+      await respond({ response_type: 'ephemeral', text: "No account. `/south-open-account` first. You can't own things without an account." });
+      return;
+    }
+
+    if (inventory.length === 0) {
+      await respond({
+        response_type: 'ephemeral',
+        text: "*Your Inventory*\n\nEmpty. Like your wallet. Like your soul.\n\nVisit `/south-shop` to buy things you don't need.",
+      });
+      return;
+    }
+
+    const flavourText = {
+      blahaj: "It stares at you with its beady little eyes. You feel... comforted. Kevin does not approve.",
+      fee_insurance: "A laminated card that says 'NO FEES' in Comic Sans. The fine print says 'lol jk maybe'.",
+      kevins_briefcase: "It hums faintly. You haven't opened it. You won't. You can't.",
+      office_light_bulb: "60 watts of pure rebellion. The flickering has stopped. For now.",
+      incident_report: "Every page is blacked out. Except one word on page 47: 'Kevin.'",
+      southbag_mug: "The handle broke off immediately. Classic Southbag quality. Still holds liquid though. Barely.",
+      kevins_parking_spot: "A laminated parking pass. Kevin has been circling the lot for weeks. He suspects nothing.",
+    };
+
+    const itemCounts = {};
+    for (const item of inventory) {
+      if (!itemCounts[item.itemId]) {
+        itemCounts[item.itemId] = { name: item.name, count: 0, giftedBy: null };
+      }
+      itemCounts[item.itemId].count++;
+      if (item.giftedBy) itemCounts[item.itemId].giftedBy = item.giftedBy;
+    }
+
+    const lines = Object.entries(itemCounts).map(([itemId, info]) => {
+      const flavour = flavourText[itemId] || "A mysterious item. Even we don't know what it does.";
+      const countText = info.count > 1 ? ` (x${info.count})` : '';
+      const giftText = info.giftedBy ? ` _(gifted by <@${info.giftedBy}>)_` : '';
+      return `*${info.name}*${countText}${giftText}\n_${flavour}_`;
+    });
+
+    await respond({
+      response_type: 'ephemeral',
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: 'Your Inventory' },
+        },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: lines.join('\n\n') },
+        },
+        {
+          type: 'context',
+          elements: [
+            { type: 'mrkdwn', text: `_${inventory.length} item${inventory.length === 1 ? '' : 's'} total. None of them useful._` },
+          ],
+        },
+      ],
     });
   });
 }
