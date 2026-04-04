@@ -1068,13 +1068,13 @@ function registerBankingCommands(app, convex, api) {
 
     const result = await convex.mutation(api.accounts.gift, { senderId: userId, recipientId, amount });
 
-    if (result.error === 'no_account') { await respond({ response_type: 'ephemeral', text: "You don't have an account. `/south-open-account` first." }); return; }
-    if (result.error === 'no_recipient') { await respond({ response_type: 'ephemeral', text: "The recipient doesn't have a Southbag account. They're probably better off." }); return; }
+    if (result.error === 'no_sender_account') { await respond({ response_type: 'ephemeral', text: "You don't have an account. `/south-open-account` first." }); return; }
+    if (result.error === 'no_recipient_account') { await respond({ response_type: 'ephemeral', text: "The recipient doesn't have a Southbag account. They're probably better off." }); return; }
     if (result.error === 'self_gift') { await respond({ response_type: 'ephemeral', text: "You can't gift money to yourself. That's just... moving money. With extra fees." }); return; }
     if (result.error === 'insufficient') { await respond({ response_type: 'ephemeral', text: `Insufficient funds. You have ${formatMoney(result.balance)} but need ${formatMoney(result.needed)}. Generosity requires money.` }); return; }
 
-    await notifyBalanceChange(client, convex, api, userId, `Gift to <@${recipientId}>`, -(amount + result.tax), result.senderBalance);
-    await notifyBalanceChange(client, convex, api, recipientId, `Gift from <@${userId}>`, result.netReceived, result.recipientBalance);
+    await notifyBalanceChange(client, convex, api, userId, `Gift to <@${recipientId}>`, -(amount + result.tax), result.senderNewBalance);
+    await notifyBalanceChange(client, convex, api, recipientId, `Gift from <@${userId}>`, result.amount, result.recipientNewBalance);
 
     await respond({
       response_type: 'ephemeral',
@@ -1087,7 +1087,7 @@ function registerBankingCommands(app, convex, api) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*Sent:* ${formatMoney(amount)} to <@${recipientId}>\n*Generosity tax:* -${formatMoney(result.tax)}\n*Net received by them:* ${formatMoney(result.netReceived)}\n\n*Your new balance:* ${formatMoney(result.senderBalance)}`,
+            text: `*Sent:* ${formatMoney(amount)} to <@${recipientId}>\n*Generosity tax:* -${formatMoney(result.tax)}\n*Net received by them:* ${formatMoney(result.amount)}\n\n*Your new balance:* ${formatMoney(result.senderNewBalance)}`,
           },
         },
         {
