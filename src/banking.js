@@ -1769,6 +1769,212 @@ function registerBankingCommands(app, convex, api) {
       ],
     });
   });
+  // /south-combine - Combine two items into something new
+  app.command('/south-combine', async ({ command, ack, respond }) => {
+    await ack();
+    const userId = command.user_id;
+    const text = command.text.trim().toLowerCase();
+
+    if (!text || text === 'list' || text === 'recipes') {
+      // Show all available recipes
+      const recipes = [
+        'Blahaj + Kevin\'s Stapler = *Weaponised Blahaj*',
+        'Blahaj + Fire Extinguisher = *Foam Shark*',
+        'Blahaj + Motivational Poster = *Inspirational Shark*',
+        'Kevin\'s Stapler + Complaint Form = *Stapled Complaint*',
+        'Kevin\'s Stapler + Employee Handbook = *Legally Binding Handbook*',
+        'Fire Extinguisher + Office Plant = *Foam Plant*',
+        'Fire Extinguisher + Server Rack Dust = *Dust Cannon*',
+        'Kevin\'s Briefcase + Kevin\'s Tie = *Kevin\'s Full Kit*',
+        'Kevin\'s Briefcase + 2019 Incident Report = *The Full 2019 Dossier*',
+        'Kevin\'s Coffee Mug + Server Rack Dust = *Kevin\'s Cursed Brew*',
+        'Broken Clock + Fluorescent Tube = *Time Disruptor*',
+        'Ceiling Tile + Sticky Notes = *The Message Board*',
+        'Office Light Bulb + Network Cable = *Internet Lamp*',
+        'Exit Sign + Break Room Key = *The Way Out*',
+        'Expired Security Badge + Office Key Card = *All-Access Pass*',
+        'Paper Shredder + Kevin\'s Password = *Shredded Secrets*',
+        'Southbag Mug + Kevin\'s Coffee Mug = *The Unholy Chalice*',
+        'Whiteboard Marker + Emergency Manual = *The Revised Protocol*',
+        'Desk Drawer Contents + Visitor Badge = *Employee Zero*',
+        'Kevin\'s Family Photo + Kevin\'s Nameplate = *Kevin\'s Identity*',
+        'Water Cooler + Parking Cone = *Traffic Fountain*',
+      ];
+      await respond({
+        response_type: 'ephemeral',
+        blocks: [
+          { type: 'header', text: { type: 'plain_text', text: 'Combination Recipes' } },
+          { type: 'section', text: { type: 'mrkdwn', text: recipes.join('\n') } },
+          { type: 'context', elements: [{ type: 'mrkdwn', text: '_Usage: `/south-combine <item1> + <item2>` — Crafting fee: $0.25. Failed attempts: $0.10. Because even failure costs money._' }] },
+        ],
+      });
+      return;
+    }
+
+    // Parse "item1 + item2"
+    const parts = text.split('+').map(p => p.trim());
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+      await respond({ response_type: 'ephemeral', text: 'Usage: `/south-combine <item1> + <item2>` or `/south-combine list` to see recipes.\nExample: `/south-combine blahaj + kevins stapler`' });
+      return;
+    }
+
+    // Fuzzy match item names to IDs
+    const inventory = await convex.query(api.shop.getInventory, { userId });
+    if (!inventory || inventory.length === 0) {
+      await respond({ response_type: 'ephemeral', text: "Your inventory is empty. Can't combine nothing with nothing. Although we could charge you for trying." });
+      return;
+    }
+
+    const matchItem = (search) => {
+      const s = search.replace(/[^a-z0-9 ]/g, '').trim();
+      // Try exact itemId match first
+      const idMatch = s.replace(/\s+/g, '_');
+      const byId = inventory.find(i => i.itemId === idMatch || i.itemId === `combo:${idMatch}`);
+      if (byId) return byId.itemId;
+      // Try name match
+      const byName = inventory.find(i => i.name.toLowerCase().replace(/[^a-z0-9 ]/g, '').includes(s));
+      if (byName) return byName.itemId;
+      // Try partial itemId match
+      const byPartial = inventory.find(i => i.itemId.includes(s.replace(/\s+/g, '_')));
+      if (byPartial) return byPartial.itemId;
+      return null;
+    };
+
+    const itemIdA = matchItem(parts[0]);
+    const itemIdB = matchItem(parts[1]);
+
+    if (!itemIdA) {
+      await respond({ response_type: 'ephemeral', text: `Couldn't find "${parts[0]}" in your inventory. Check \`/south-inventory\`.` });
+      return;
+    }
+    if (!itemIdB) {
+      await respond({ response_type: 'ephemeral', text: `Couldn't find "${parts[1]}" in your inventory. Check \`/south-inventory\`.` });
+      return;
+    }
+
+    const result = await convex.mutation(api.combine.combine, { userId, itemIdA, itemIdB });
+
+    if (result.error === 'no_account') { await respond({ response_type: 'ephemeral', text: "No account. `/south-open-account` first." }); return; }
+    if (result.error === 'missing_item') { await respond({ response_type: 'ephemeral', text: `You don't have that item anymore. Check \`/south-inventory\`.` }); return; }
+    if (result.error === 'no_recipe') {
+      await respond({ response_type: 'ephemeral', text: `Those items refuse to combine. They looked at each other and said no.\n\nFailed attempt fee: ${formatMoney(result.fee)}\nNew balance: ${formatMoney(result.newBalance)}\n\n_Use \`/south-combine list\` to see what actually works._` });
+      return;
+    }
+
+    await respond({
+      response_type: 'in_channel',
+      blocks: [
+        { type: 'header', text: { type: 'plain_text', text: 'ITEM COMBINED' } },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: `<@${userId}> has created: *${result.resultName}*\n\n_${result.description}_` },
+        },
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: `_Crafting fee: ${formatMoney(result.fee)} · Use it with \`/south-use ${result.resultName.toLowerCase()} on <target>\`_` }],
+        },
+      ],
+    });
+  });
+
+  // /south-use - Use a combined item on someone
+  app.command('/south-use', async ({ command, ack, respond, client }) => {
+    await ack();
+    const userId = command.user_id;
+    const text = command.text.trim();
+
+    if (!text) {
+      await respond({ response_type: 'ephemeral', text: 'Usage: `/south-use <item> on <target>`\nTargets: `@someone`, `kevin`, or `support`\n\nExample: `/south-use weaponised blahaj on support`' });
+      return;
+    }
+
+    // Parse "item on target"
+    const onMatch = text.match(/^(.+?)\s+on\s+(.+)$/i);
+    if (!onMatch) {
+      await respond({ response_type: 'ephemeral', text: 'Usage: `/south-use <item> on <target>`\nExample: `/south-use weaponised blahaj on kevin`' });
+      return;
+    }
+
+    const itemSearch = onMatch[1].trim().toLowerCase();
+    const targetText = onMatch[2].trim();
+
+    // Find the item in inventory
+    const inventory = await convex.query(api.shop.getInventory, { userId });
+    if (!inventory || inventory.length === 0) {
+      await respond({ response_type: 'ephemeral', text: "Your inventory is empty. Craft something with `/south-combine` first." });
+      return;
+    }
+
+    const matchCombinedItem = (search) => {
+      const s = search.replace(/[^a-z0-9 ]/g, '').trim();
+      // Only match combo items
+      const combos = inventory.filter(i => i.itemId.startsWith('combo:'));
+      const byName = combos.find(i => i.name.toLowerCase().replace(/[^a-z0-9 ]/g, '').includes(s));
+      if (byName) return byName.itemId;
+      const byId = combos.find(i => i.itemId.toLowerCase().includes(s.replace(/\s+/g, '_')));
+      if (byId) return byId.itemId;
+      return null;
+    };
+
+    const itemId = matchCombinedItem(itemSearch);
+    if (!itemId) {
+      await respond({ response_type: 'ephemeral', text: `Couldn't find a combined item matching "${itemSearch}" in your inventory. You can only use combined items — craft one with \`/south-combine\` first.` });
+      return;
+    }
+
+    // Parse target
+    let targetType, targetUserId;
+    const mentionMatch = targetText.match(/<@([A-Z0-9]+)(\|[^>]*)?>/);
+    if (targetText.toLowerCase() === 'kevin' || targetText.toLowerCase() === 'him') {
+      targetType = 'kevin';
+    } else if (targetText.toLowerCase() === 'support' || targetText.toLowerCase() === 'agent' || targetText.toLowerCase() === 'bot' || targetText.toLowerCase() === 'ai') {
+      targetType = 'support';
+    } else if (mentionMatch) {
+      targetType = 'user';
+      targetUserId = mentionMatch[1];
+    } else {
+      await respond({ response_type: 'ephemeral', text: `Unknown target "${targetText}". Use \`@someone\`, \`kevin\`, or \`support\`.` });
+      return;
+    }
+
+    const result = await convex.mutation(api.combine.useItem, { userId, itemId, targetType, targetUserId });
+
+    if (result.error === 'no_account') { await respond({ response_type: 'ephemeral', text: "No account." }); return; }
+    if (result.error === 'not_combined') { await respond({ response_type: 'ephemeral', text: result.message }); return; }
+    if (result.error === 'missing_item') { await respond({ response_type: 'ephemeral', text: "You don't have that item anymore." }); return; }
+    if (result.error) { await respond({ response_type: 'ephemeral', text: `Error: ${result.error}` }); return; }
+
+    const targetLabel = targetType === 'kevin' ? 'Kevin' : targetType === 'support' ? 'Southbag Support' : `<@${targetUserId}>`;
+
+    // For support target, process commands in the response (like [FEE:...])
+    const { parseCommands, executeCommands } = require('./commands');
+    const { cleanText, commands } = parseCommands(result.responseText);
+
+    await respond({
+      response_type: 'in_channel',
+      blocks: [
+        { type: 'header', text: { type: 'plain_text', text: `${result.resultName} USED ON ${targetLabel.toUpperCase().replace(/<@[A-Z0-9]+>/g, 'A VICTIM')}` } },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: `<@${userId}> used *${result.resultName}* on ${targetLabel}:\n\n${cleanText}` },
+        },
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: `_Item consumed · Usage fee: ${formatMoney(result.fee)} · The item is gone forever. Worth it? Probably not._` }],
+        },
+      ],
+    });
+
+    // Execute any embedded commands (fees, disconnects, glitches, etc.)
+    if (commands.length > 0) {
+      const say = async (opts) => {
+        if (typeof opts === 'string') opts = { text: opts, channel: command.channel_id };
+        await client.chat.postMessage({ channel: command.channel_id, ...opts });
+      };
+      const fakeEvent = { channel: command.channel_id, user: userId, ts: Date.now().toString(), thread_ts: undefined };
+      await executeCommands(commands, say, client, fakeEvent, { convex, api, notifyBalanceChange });
+    }
+  });
 }
 
 async function notifyBalanceChange(client, convex, api, userId, description, amount, newBalance) {
