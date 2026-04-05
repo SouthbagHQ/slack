@@ -167,6 +167,18 @@
         "command": "/south-inventory",
         "description": "View your questionable purchases",
         "should_escape": false
+      },
+      {
+        "command": "/south-combine",
+        "description": "Combine two inventory items into a new item",
+        "usage_hint": "<item1> + <item2>",
+        "should_escape": false
+      },
+      {
+        "command": "/south-use",
+        "description": "Use a combined item on someone",
+        "usage_hint": "<item> on <target>",
+        "should_escape": true
       }
     ]
   },
