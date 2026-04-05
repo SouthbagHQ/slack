@@ -473,17 +473,20 @@ export const useItem = mutation({
     if (!account) return { error: "no_account" };
 
     const inventory = account.inventory || [];
-    const def = COMBOS_BY_RESULT[args.itemId];
-    if (!def)
+
+    // Check if item is a combo (either legacy or AI-generated)
+    if (!args.itemId.startsWith("combo:")) {
       return {
         error: "not_combined",
         message:
           "You can only use combined items. Regular items just sit there. Judging you.",
       };
+    }
 
     const idx = inventory.findIndex((i) => i.itemId === args.itemId);
     if (idx === -1) return { error: "missing_item" };
 
+    const item = inventory[idx];
     const newInventory = [...inventory];
     newInventory.splice(idx, 1);
 
@@ -498,16 +501,16 @@ export const useItem = mutation({
       userId: args.userId,
       type: "fee",
       amount: -fee,
-      description: `Item usage fee: ${def.resultName}`,
+      description: `Item usage fee: ${item.name}`,
       balanceAfter: newBalance,
       createdAt: Date.now(),
     });
 
     return {
       success: true,
-      resultName: def.resultName,
-      description: def.description,
-      ingredients: def.ingredients,
+      resultName: item.name,
+      description: "A combined item with mysterious properties.",
+      ingredients: [],
       fee,
       newBalance,
       targetType: args.targetType,
