@@ -249,6 +249,11 @@ const boltApp = {
       await handler({ command, ack, respond, client });
     });
   },
+  view: (callbackIdOrConfig, handler) => {
+    app.view(callbackIdOrConfig, async ({ view, ack, client, body }) => {
+      await handler({ view, ack, client, body });
+    });
+  },
   event: () => {},
 };
 registerBankingCommands(boltApp, convex, api, chat, env, ALLOWED_CHANNEL);
