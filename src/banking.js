@@ -3243,10 +3243,10 @@ Respond ONLY in this exact JSON format (no markdown, no extra text):
       private_metadata: JSON.stringify({ userId }),
       blocks: [
         {
-          type: "section",
+          type: "input",
           block_id: "item_block",
-          text: { type: "mrkdwn", text: "*Select an item to use*" },
-          accessory: {
+          label: { type: "plain_text", text: "Select an item to use" },
+          element: {
             type: "static_select",
             action_id: "item_select",
             placeholder: { type: "plain_text", text: "Choose an item" },
@@ -3254,10 +3254,10 @@ Respond ONLY in this exact JSON format (no markdown, no extra text):
           },
         },
         {
-          type: "section",
+          type: "input",
           block_id: "target_block",
-          text: { type: "mrkdwn", text: "*Target*" },
-          accessory: {
+          label: { type: "plain_text", text: "Target" },
+          element: {
             type: "static_select",
             action_id: "target_type",
             placeholder: { type: "plain_text", text: "Choose a target" },
