@@ -10,6 +10,7 @@ const { registerAppHome } = require('./home');
 
 const ALLOWED_CHANNEL = 'C0AH7GB4V6X';
 
+const shopBuyers = new Set(); // Track users who bought something during their shop session
 
 const convex = new ConvexHttpClient(process.env.CONVEX_URL);
 
@@ -116,7 +117,22 @@ async function handleMessage({ event, client }) {
   ];
 
   try {
-    const aiResponse = await chat(messages, env);
+    // 15% chance Kevin takes over the conversation
+    const kevinTakeover = Math.random() < 0.15;
+    let aiResponse;
+
+    if (kevinTakeover) {
+      const kevinPrompt = `You are Kevin, the CEO of Southbag Online Banking. You have intercepted this support conversation. You speak in short, menacing, corporate sentences. You are deeply suspicious of everyone. You refer to yourself in the third person sometimes. You do not explain why you are here. You were always here. You charge fees for things that aren't services. You do not like questions. You do not like answers either. You sign off messages with "- Kevin" but sometimes forget and sign off as "- K" or just "- Him". You know things about the user that you shouldn't. You are unsettling. You occasionally reference The Briefcase, The Pile, or the parking lot. You do not apologise. You have never apologised. Use the [FEE:amount:reason] command liberally — Kevin's fees are bigger and more personal. Kevin's fees range from $0.50 to $50.00 and have reasons like "Kevin's time", "Looking at Kevin wrong", "Existing near Kevin", "Kevin tax", "Interrupting Kevin's lunch", "Kevin knows what you did". Keep responses short and threatening.`;
+
+      const kevinMessages = [
+        { role: 'system', content: kevinPrompt + profileContext + bankingContext + inventoryContext },
+        ...recentHistory.map((msg) => ({ role: msg.role, content: msg.content })),
+      ];
+      aiResponse = await chat(kevinMessages, env);
+    } else {
+      aiResponse = await chat(messages, env);
+    }
+
     const { cleanText, commands } = parseCommands(aiResponse);
 
     await convex.mutation(api.messages.store, {
@@ -126,6 +142,10 @@ async function handleMessage({ event, client }) {
       content: cleanText,
       createdAt: Date.now(),
     });
+
+    if (kevinTakeover && cleanText) {
+      await say({ text: `_*Southbag Support has been temporarily replaced.*_`, thread_ts: threadTs });
+    }
 
     if (cleanText) {
       await say({ text: cleanText, thread_ts: threadTs });
@@ -201,6 +221,36 @@ const SHOP_ITEMS = {
   incident_report: { name: '2019 Incident Report', price: 500.00 },
   southbag_mug: { name: 'Southbag Mug', price: 12.50 },
   kevins_parking_spot: { name: "Kevin's Parking Spot", price: 1000.00 },
+  kevins_stapler: { name: "Kevin's Stapler", price: 15.00 },
+  break_room_key: { name: 'Break Room Key', price: 75.00 },
+  employee_handbook: { name: 'Employee Handbook', price: 3.00 },
+  office_plant: { name: 'Office Plant', price: 25.00 },
+  motivational_poster: { name: 'Motivational Poster', price: 8.00 },
+  kevins_voicemail: { name: "Kevin's Voicemail", price: 150.00 },
+  fire_extinguisher: { name: 'Fire Extinguisher', price: 40.00 },
+  parking_cone: { name: 'Parking Cone', price: 2.00 },
+  server_rack_dust: { name: 'Server Rack Dust', price: 0.50 },
+  complaint_form: { name: 'Complaint Form', price: 10.00 },
+  kevins_tie: { name: "Kevin's Tie", price: 200.00 },
+  ceiling_tile: { name: 'Ceiling Tile', price: 1.00 },
+  security_badge: { name: 'Expired Security Badge', price: 35.00 },
+  fluorescent_tube: { name: 'Fluorescent Tube', price: 7.50 },
+  kevins_chair: { name: "Kevin's Office Chair", price: 2000.00 },
+  kevins_password: { name: "Kevin's Password", price: 5000.00 },
+  water_cooler: { name: 'Water Cooler', price: 30.00 },
+  exit_sign: { name: 'Exit Sign', price: 18.00 },
+  kevins_family_photo: { name: "Kevin's Family Photo", price: 350.00 },
+  broken_clock: { name: 'Broken Clock', price: 6.00 },
+  sticky_notes: { name: 'Sticky Notes (Used)', price: 0.25 },
+  office_key_card: { name: 'Office Key Card (Floor 3)', price: 500.00 },
+  paper_shredder: { name: 'Paper Shredder', price: 45.00 },
+  kevins_coffee_mug: { name: "Kevin's Coffee Mug", price: 85.00 },
+  whiteboard_marker: { name: 'Whiteboard Marker (Red)', price: 4.00 },
+  desk_drawer_contents: { name: 'Desk Drawer Contents', price: 20.00 },
+  visitor_badge: { name: 'Visitor Badge (Permanent)', price: 60.00 },
+  network_cable: { name: 'Network Cable', price: 11.00 },
+  kevins_nameplate: { name: "Kevin's Nameplate", price: 750.00 },
+  emergency_manual: { name: 'Emergency Manual', price: 100.00 },
 };
 
 const GIFT_ANNOUNCEMENTS = {
@@ -211,6 +261,36 @@ const GIFT_ANNOUNCEMENTS = {
   incident_report: "Legal has been notified. Again.",
   southbag_mug: "HR is pretending not to notice.",
   kevins_parking_spot: "Kevin is circling the parking lot. He looks upset.",
+  kevins_stapler: "Kevin is checking his desk drawer. He looks concerned.",
+  break_room_key: "A sound was heard from behind the break room door.",
+  employee_handbook: "HR has been notified. HR does not respond.",
+  office_plant: "The fake plant has been adopted. Facilities is confused.",
+  motivational_poster: "The poster on the wall has changed. No one touched it.",
+  kevins_voicemail: "Someone's phone rang. No one has a phone.",
+  fire_extinguisher: "The fire marshal has been notified. The fire marshal does not exist.",
+  parking_cone: "Kevin is in the parking lot. He found the empty space.",
+  server_rack_dust: "The server room temperature dropped 3 degrees.",
+  complaint_form: "A complaint was filed. It was immediately lost.",
+  kevins_tie: "Kevin reached for his neck. Something is missing.",
+  ceiling_tile: "A ceiling tile is missing. Nobody looked up.",
+  security_badge: "Security has been alerted. Security is Kevin.",
+  fluorescent_tube: "The lights in aisle 4 went out. Then came back. Different.",
+  kevins_chair: "Kevin stood up. His chair rolled away. He didn't follow it.",
+  kevins_password: "IT has been alerted. IT is Kevin.",
+  water_cooler: "The water cooler in the lobby is gone. Nobody moved it.",
+  exit_sign: "The exit signs in the building have all rotated 90 degrees.",
+  kevins_family_photo: "Kevin's desk has been cleaned. By no one.",
+  broken_clock: "Every clock in the office stopped. Then started again. At 2:19.",
+  sticky_notes: "New sticky notes have appeared on Kevin's door. They say 'THANK YOU'.",
+  office_key_card: "The elevator made a sound it's never made before.",
+  paper_shredder: "The shredder in HR ran by itself for 30 seconds.",
+  kevins_coffee_mug: "There's a coffee ring on your desk. You don't drink coffee.",
+  whiteboard_marker: "The whiteboard in the meeting room is full. The meeting room was locked.",
+  desk_drawer_contents: "Something in the building shifted. Subtly.",
+  visitor_badge: "Reception has a new permanent visitor. It's you.",
+  network_cable: "The Wi-Fi went out for exactly one second. Every screen flickered.",
+  kevins_nameplate: "Kevin's office door is blank. He doesn't seem to notice.",
+  emergency_manual: "The fire alarm tested itself. It passed. Barely.",
 };
 
 // Handle overflow menu actions from shop
@@ -248,6 +328,7 @@ app.action(/^shop_action_/, async ({ action, ack, body, client }) => {
     }
 
     await notifyBalanceChange(client, convex, api, userId, `Shop: ${result.itemName}`, -result.price, result.newBalance);
+    shopBuyers.add(userId);
     await client.chat.postEphemeral({
       channel: userId,
       user: userId,
@@ -365,6 +446,7 @@ app.action(/^shop_action_/, async ({ action, ack, body, client }) => {
     }
 
     await notifyBalanceChange(client, convex, api, userId, `Tribute to Kevin: ${result.itemName}`, -result.price, result.newBalance);
+    shopBuyers.add(userId);
 
     const kevinReactions = [
       "Kevin has acknowledged your offering. He did not smile.",
@@ -414,6 +496,7 @@ app.view('gift_modal', async ({ view, ack, client }) => {
   await ack();
 
   await notifyBalanceChange(client, convex, api, senderId, `Gift: ${result.itemName}`, -result.price, result.senderNewBalance);
+  shopBuyers.add(senderId);
 
   const announcement = GIFT_ANNOUNCEMENTS[itemId] || 'Southbag Support has no comment.';
   const msgLine = giftMessage ? `\n_"${giftMessage}"_` : '';
@@ -452,11 +535,43 @@ app.view('buy_multi_modal', async ({ view, ack, client }) => {
   await ack();
 
   await notifyBalanceChange(client, convex, api, userId, `Shop: ${result.itemName} x${result.quantity}`, -result.totalCost, result.newBalance);
+  shopBuyers.add(userId);
   await client.chat.postEphemeral({
     channel: userId,
     user: userId,
     text: `You bought *${result.quantity}x ${result.itemName}* for $${result.totalCost.toFixed(2)}.\nNew balance: $${result.newBalance.toFixed(2)}\n\n_${result.quantity} of the same thing. Bold strategy._`,
   });
+});
+
+// Handle shop modal closed without buying
+app.view({ callback_id: 'shop_browse', type: 'view_closed' }, async ({ view, ack, client }) => {
+  await ack();
+  const { userId } = JSON.parse(view.private_metadata);
+
+  // If they bought something, don't charge
+  if (shopBuyers.has(userId)) {
+    shopBuyers.delete(userId);
+    return;
+  }
+
+  // Charge window shopping fee
+  const fee = 0.15;
+  const newBal = await convex.mutation(api.accounts.chargeFee, {
+    userId,
+    amount: fee,
+    description: 'Window shopping fee — looking is not free',
+  });
+
+  if (newBal !== null) {
+    await notifyBalanceChange(client, convex, api, userId, 'Window shopping fee', -fee, newBal);
+    try {
+      await client.chat.postEphemeral({
+        channel: userId,
+        user: userId,
+        text: `You left the shop without buying anything. That'll be *$${fee.toFixed(2)}* for wasting our time.\n\n_Window shopping fee applied. New balance: $${newBal.toFixed(2)}_`,
+      });
+    } catch (e) {}
+  }
 });
 
 // --- Start ---

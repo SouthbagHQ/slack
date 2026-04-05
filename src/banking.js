@@ -14,6 +14,31 @@ const MYSTERY_FEES = [
   "Digital presence surcharge",
   "Screen-looking fee",
   "Balance inquiry anticipation fee",
+  "Thinking about money fee",
+  "Having a pulse surcharge",
+  "Kevin's lunch fund",
+  "Ambient room temperature levy",
+  "Fee for reading this fee",
+  "Gravity usage charge",
+  "Account number memorisation tax",
+  "Emotional support fee",
+  "Existing in a timezone surcharge",
+  "Kevin looked at your account fee",
+  "Cursor hovering surcharge",
+  "Asking 'why' fee",
+  "Not asking 'why' fee",
+  "Shoe-wearing assessment",
+  "Breathing-while-banking fee",
+  "Wi-Fi proximity tax",
+  "Having opinions surcharge",
+  "Font rendering levy",
+  "Tuesday surcharge (it's always Tuesday somewhere)",
+  "Kevin's parking validation",
+  "Blinking fee (per blink)",
+  "Account hydration surcharge",
+  "Suspicion of happiness tax",
+  "Fee for not having more fees",
+  "The 2019 fee (do not ask)",
 ];
 
 function randomFee() {
@@ -41,14 +66,25 @@ function registerBankingCommands(app, convex, api) {
 
     // Charge a balance inquiry fee
     const feeDesc = "Balance inquiry fee";
-    const feeAmount = 0.01;
-    const newBalance = await convex.mutation(api.accounts.chargeFee, {
+    const feeAmount = 0.05;
+    const balanceAfterInquiry = await convex.mutation(api.accounts.chargeFee, {
       userId,
       amount: feeAmount,
       description: feeDesc,
     });
 
-    await notifyBalanceChange(client, convex, api, userId, feeDesc, -feeAmount, newBalance);
+    // Charge a balance awareness surcharge
+    const surchargeDesc = "Balance awareness surcharge";
+    const surchargeAmount = 0.02;
+    const newBalance = await convex.mutation(api.accounts.chargeFee, {
+      userId,
+      amount: surchargeAmount,
+      description: surchargeDesc,
+    });
+
+    const totalFees = feeAmount + surchargeAmount;
+
+    await notifyBalanceChange(client, convex, api, userId, feeDesc, -totalFees, newBalance);
 
     const statusEmoji = {
       active: '',
@@ -71,12 +107,13 @@ function registerBankingCommands(app, convex, api) {
             { type: 'mrkdwn', text: `*Status:*\n${account.status}${statusEmoji[account.status] || ''}` },
             { type: 'mrkdwn', text: `*Balance:*\n${formatMoney(newBalance ?? account.balance)}` },
             { type: 'mrkdwn', text: `*Balance inquiry fee:*\n-${formatMoney(feeAmount)}` },
+            { type: 'mrkdwn', text: `*Balance awareness surcharge:*\n-${formatMoney(surchargeAmount)}` },
           ],
         },
         {
           type: 'context',
           elements: [
-            { type: 'mrkdwn', text: '_Your balance was charged for checking your balance. Classic._' },
+            { type: 'mrkdwn', text: '_Your balance was charged for checking your balance, and then charged again for knowing about it. Classic._' },
           ],
         },
       ],
@@ -615,6 +652,10 @@ function registerBankingCommands(app, convex, api) {
               { type: 'mrkdwn', text: `*Tax (40%):*\n-${formatMoney(result.tax)}` },
             ],
           },
+          ...(result.workFees && result.workFees.length > 0 ? [{
+            type: 'section',
+            text: { type: 'mrkdwn', text: `*Workplace deductions:*\n${result.workFees.map(f => `• ${f.desc}: -${formatMoney(f.amount)}`).join('\n')}` },
+          }] : []),
           {
             type: 'section',
             text: { type: 'mrkdwn', text: `*Net pay:* ${formatMoney(result.net)}\n*New balance:* ${formatMoney(result.newBalance)}${bonusMsg}` },
@@ -622,7 +663,7 @@ function registerBankingCommands(app, convex, api) {
           {
             type: 'context',
             elements: [
-              { type: 'mrkdwn', text: result.bonusType ? '_Even Southbag has good days. Rarely._' : '_Another day, another dollar. Minus 40% tax._' },
+              { type: 'mrkdwn', text: result.bonusType ? '_Even Southbag has good days. Rarely._' : '_Another day, another dollar. Minus 40% tax. Minus fees. Minus hope._' },
             ],
           },
         ],
@@ -1538,6 +1579,36 @@ function registerBankingCommands(app, convex, api) {
       { id: 'incident_report', name: '2019 Incident Report', price: 500.00, desc: 'Redacted. All of it. Worth every cent.' },
       { id: 'southbag_mug', name: 'Southbag Mug', price: 12.50, desc: "Says 'I survived Southbag Support' on the side. The handle is broken." },
       { id: 'kevins_parking_spot', name: "Kevin's Parking Spot", price: 1000.00, desc: "He doesn't know you have this. Yet." },
+      { id: 'kevins_stapler', name: "Kevin's Stapler", price: 15.00, desc: 'Red. Do not touch. Kevin knows.' },
+      { id: 'break_room_key', name: 'Break Room Key', price: 75.00, desc: 'The break room has been locked since 2019. Nobody knows why.' },
+      { id: 'employee_handbook', name: 'Employee Handbook', price: 3.00, desc: "400 pages. All of them say \"don't\"." },
+      { id: 'office_plant', name: 'Office Plant', price: 25.00, desc: "It's fake. Everything here is fake." },
+      { id: 'motivational_poster', name: 'Motivational Poster', price: 8.00, desc: '"Hang in there" but the cat fell off years ago.' },
+      { id: 'kevins_voicemail', name: "Kevin's Voicemail", price: 150.00, desc: '47 seconds of breathing and then "I know."' },
+      { id: 'fire_extinguisher', name: 'Fire Extinguisher', price: 40.00, desc: 'Expired in 2017. Still on the wall. Decorative.' },
+      { id: 'parking_cone', name: 'Parking Cone', price: 2.00, desc: "From the parking lot. Kevin's been looking for it." },
+      { id: 'server_rack_dust', name: 'Server Rack Dust', price: 0.50, desc: 'A small bag of dust from the server room. Vintage 2019.' },
+      { id: 'complaint_form', name: 'Complaint Form', price: 10.00, desc: 'Pre-filled with "denied". Saves time.' },
+      { id: 'kevins_tie', name: "Kevin's Tie", price: 200.00, desc: 'He wore this to the 2019 holiday party. It has a stain.' },
+      { id: 'ceiling_tile', name: 'Ceiling Tile', price: 1.00, desc: "From above your desk. There's something written on the back. You can't read it." },
+      { id: 'security_badge', name: 'Expired Security Badge', price: 35.00, desc: 'Opens nothing. But it beeps when you tap it. Reassuring.' },
+      { id: 'fluorescent_tube', name: 'Fluorescent Tube', price: 7.50, desc: 'Buzzes at a frequency that causes mild existential dread.' },
+      { id: 'kevins_chair', name: "Kevin's Office Chair", price: 2000.00, desc: 'Ergonomic. Heated. Sentient. It knows things.' },
+      { id: 'kevins_password', name: "Kevin's Password", price: 5000.00, desc: "Written on a sticky note. You shouldn't have this." },
+      { id: 'water_cooler', name: 'Water Cooler', price: 30.00, desc: 'The one where rumours are born. Empty. Has been empty.' },
+      { id: 'exit_sign', name: 'Exit Sign', price: 18.00, desc: 'It points the wrong way. Always has.' },
+      { id: 'kevins_family_photo', name: "Kevin's Family Photo", price: 350.00, desc: "The frame is empty. Kevin says it's not." },
+      { id: 'broken_clock', name: 'Broken Clock', price: 6.00, desc: 'Stopped at 2:19 AM. The same time as the incident.' },
+      { id: 'sticky_notes', name: 'Sticky Notes (Used)', price: 0.25, desc: 'Someone wrote "HELP" on all of them. In Kevin\'s handwriting.' },
+      { id: 'office_key_card', name: 'Office Key Card (Floor 3)', price: 500.00, desc: 'There is no Floor 3. The elevator disagrees.' },
+      { id: 'paper_shredder', name: 'Paper Shredder', price: 45.00, desc: 'Only shreds important documents. Refuses junk mail.' },
+      { id: 'kevins_coffee_mug', name: "Kevin's Coffee Mug", price: 85.00, desc: 'Always full. Always cold. Nobody refills it.' },
+      { id: 'whiteboard_marker', name: 'Whiteboard Marker (Red)', price: 4.00, desc: "Writes in a colour that doesn't exist on the spectrum." },
+      { id: 'desk_drawer_contents', name: 'Desk Drawer Contents', price: 20.00, desc: 'A sealed bag. Rattles. Do not open before 2027.' },
+      { id: 'visitor_badge', name: 'Visitor Badge (Permanent)', price: 60.00, desc: 'Says "VISITOR" but the expiry date is "never". You live here now.' },
+      { id: 'network_cable', name: 'Network Cable', price: 11.00, desc: 'Connected to something. Nobody knows what. Unplugging it causes screaming.' },
+      { id: 'kevins_nameplate', name: "Kevin's Nameplate", price: 750.00, desc: 'Solid brass. The name changes depending on who\'s reading it.' },
+      { id: 'emergency_manual', name: 'Emergency Manual', price: 100.00, desc: "Step 1: Don't panic. Step 2: Panic. Step 3: See Kevin. There is no Step 4." },
     ];
 
     const blocks = [
@@ -1587,6 +1658,9 @@ function registerBankingCommands(app, convex, api) {
         trigger_id: command.trigger_id,
         view: {
           type: 'modal',
+          callback_id: 'shop_browse',
+          notify_on_close: true,
+          private_metadata: JSON.stringify({ userId }),
           title: { type: 'plain_text', text: 'Southbag Gift Shop' },
           close: { type: 'plain_text', text: 'Leave (coward)' },
           blocks,
@@ -1627,6 +1701,36 @@ function registerBankingCommands(app, convex, api) {
       incident_report: "Every page is blacked out. Except one word on page 47: 'Kevin.'",
       southbag_mug: "The handle broke off immediately. Classic Southbag quality. Still holds liquid though. Barely.",
       kevins_parking_spot: "A laminated parking pass. Kevin has been circling the lot for weeks. He suspects nothing.",
+      kevins_stapler: "It's warm to the touch. It shouldn't be warm. Kevin's initials are carved into the bottom.",
+      break_room_key: "The key fits the lock but the door won't open. Something is blocking it from the inside.",
+      employee_handbook: "Page 1: 'Don't.' Page 2: 'Seriously.' Pages 3-400: Blank.",
+      office_plant: "You've been watering it for weeks before realising. The pot is empty. There is no soil.",
+      motivational_poster: "The frame is bolted to the wall. You cannot remove it. You've tried.",
+      kevins_voicemail: "You played it once. You will not play it again.",
+      fire_extinguisher: "The label says 'For emergency use only.' Below that, someone wrote 'there is no emergency. there was never an emergency.'",
+      parking_cone: "Kevin walked past your desk three times today. He's getting closer.",
+      server_rack_dust: "It glows faintly in the dark. IT says that's normal. IT hasn't been seen in weeks.",
+      complaint_form: "You filled it out anyway. The ink disappeared. The form is blank again.",
+      kevins_tie: "It smells like regret and expensive cologne. The stain moves when you're not looking.",
+      ceiling_tile: "You held it up to a mirror. The writing says your name. That's impossible. You bought this today.",
+      security_badge: "The photo on it isn't you. It's Kevin. All the badges are Kevin.",
+      fluorescent_tube: "It whispers. You tell yourself it's just the electrical hum. It isn't.",
+      kevins_chair: "It rolled towards you when no one was in the room. It's in your cubicle now. It won't leave.",
+      kevins_password: "It's '1234'. It's always been '1234'. You expected more. Kevin did not.",
+      water_cooler: "It gurgles at exactly 3 PM every day. There is no water inside. There is no mechanism.",
+      exit_sign: "You followed it once. You ended up in Kevin's office. He was waiting.",
+      kevins_family_photo: "You stared at the empty frame for too long. Something stared back.",
+      broken_clock: "You wound it. The hands moved backwards. Your phone clock changed too.",
+      sticky_notes: "You peeled one off. Underneath was another that said 'TOO LATE'.",
+      office_key_card: "You swiped it at the elevator. Floor 3 appeared. You did not press it. The doors closed.",
+      paper_shredder: "You fed it a blank page. It spat out a page with your employee review. You don't work here.",
+      kevins_coffee_mug: "You tried to pour it out. It refilled. You tried again. It refilled faster.",
+      whiteboard_marker: "You drew a circle. When you looked back, it was a door. It's gone now.",
+      desk_drawer_contents: "It stopped rattling. That's worse.",
+      visitor_badge: "You tried to take it off. It's attached. It's always been attached.",
+      network_cable: "You traced it through the wall. It goes into the floor. Then up. Into your desk. Out your monitor. Into the cable.",
+      kevins_nameplate: "It says your name now. It's been on your desk all morning. You didn't put it there.",
+      emergency_manual: "You opened to Step 3. Kevin's phone number is your phone number.",
     };
 
     const itemCounts = {};

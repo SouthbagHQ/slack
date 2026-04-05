@@ -14,7 +14,8 @@ export const coinflip = mutation({
       .first();
     if (!account) return { error: "no_account" };
     if (account.status === "frozen") return { error: "frozen" };
-    if (account.balance < args.bet) return { error: "insufficient", balance: account.balance };
+    const tableFee = 0.10;
+    if (account.balance < args.bet + tableFee) return { error: "insufficient", balance: account.balance };
 
     const result = Math.random() < 0.5 ? "heads" : "tails";
     const won = result === args.call;
@@ -24,18 +25,27 @@ export const coinflip = mutation({
     const payout = won ? Math.round(args.bet * 1.8 * 100) / 100 : 0;
     const net = won ? Math.round((payout - args.bet) * 100) / 100 : -args.bet;
     const newBalance = Math.round((account.balance + net) * 100) / 100;
+    const afterFee = Math.round((newBalance - tableFee) * 100) / 100;
 
-    await ctx.db.patch(account._id, { balance: newBalance });
+    await ctx.db.patch(account._id, { balance: afterFee });
     await ctx.db.insert("transactions", {
       userId: args.userId,
       type: won ? "deposit" : "withdrawal",
       amount: net,
       description: `Coinflip: ${won ? "Won" : "Lost"} (${result})`,
-      balanceAfter: newBalance,
+      balanceAfter: Math.round((account.balance + net) * 100) / 100,
       createdAt: now,
     });
+    await ctx.db.insert("transactions", {
+      userId: args.userId,
+      type: "fee",
+      amount: -tableFee,
+      description: "Table fee",
+      balanceAfter: afterFee,
+      createdAt: now + 1,
+    });
 
-    return { won, result, call: args.call, bet: args.bet, payout, net, newBalance };
+    return { won, result, call: args.call, bet: args.bet, payout, net, newBalance: afterFee, tableFee };
   },
 });
 
@@ -53,7 +63,8 @@ export const slots = mutation({
       .first();
     if (!account) return { error: "no_account" };
     if (account.status === "frozen") return { error: "frozen" };
-    if (account.balance < args.bet) return { error: "insufficient", balance: account.balance };
+    const machineRentalFee = 0.15;
+    if (account.balance < args.bet + machineRentalFee) return { error: "insufficient", balance: account.balance };
 
     const r1 = SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)];
     const r2 = SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)];
@@ -80,20 +91,29 @@ export const slots = mutation({
     const penalty = multiplier < 0 ? Math.round(args.bet * Math.abs(multiplier) * 100) / 100 : 0;
     const net = multiplier < 0 ? -(args.bet + penalty) : (payout > 0 ? Math.round((payout - args.bet) * 100) / 100 : -args.bet);
     const newBalance = Math.round((account.balance + net) * 100) / 100;
+    const afterFee = Math.round((newBalance - machineRentalFee) * 100) / 100;
 
     const won = multiplier > 0;
 
-    await ctx.db.patch(account._id, { balance: newBalance });
+    await ctx.db.patch(account._id, { balance: afterFee });
     await ctx.db.insert("transactions", {
       userId: args.userId,
       type: won ? "deposit" : "withdrawal",
       amount: net,
       description: `Slots: ${reels.join(" ")} — ${won ? "Won" : multiplier < 0 ? "Cursed" : "Lost"}`,
-      balanceAfter: newBalance,
+      balanceAfter: Math.round((account.balance + net) * 100) / 100,
       createdAt: now,
     });
+    await ctx.db.insert("transactions", {
+      userId: args.userId,
+      type: "fee",
+      amount: -machineRentalFee,
+      description: "Machine rental fee",
+      balanceAfter: afterFee,
+      createdAt: now + 1,
+    });
 
-    return { reels, won, multiplier, bet: args.bet, payout, net, newBalance };
+    return { reels, won, multiplier, bet: args.bet, payout, net, newBalance: afterFee, machineRentalFee };
   },
 });
 
@@ -109,7 +129,8 @@ export const gamble = mutation({
       .first();
     if (!account) return { error: "no_account" };
     if (account.status === "frozen") return { error: "frozen" };
-    if (account.balance < args.bet) return { error: "insufficient", balance: account.balance };
+    const dealerTip = 0.20;
+    if (account.balance < args.bet + dealerTip) return { error: "insufficient", balance: account.balance };
 
     const now = Date.now();
     const roll = Math.random() * 100;
@@ -155,18 +176,27 @@ export const gamble = mutation({
     const penalty = multiplier < 0 ? Math.round(args.bet * Math.abs(multiplier) * 100) / 100 : 0;
     const net = multiplier < 0 ? -(args.bet + penalty) : (payout > 0 ? Math.round((payout - args.bet) * 100) / 100 : -args.bet);
     const newBalance = Math.round((account.balance + net) * 100) / 100;
+    const afterFee = Math.round((newBalance - dealerTip) * 100) / 100;
     const won = multiplier > 0;
 
-    await ctx.db.patch(account._id, { balance: newBalance });
+    await ctx.db.patch(account._id, { balance: afterFee });
     await ctx.db.insert("transactions", {
       userId: args.userId,
       type: won ? "deposit" : "withdrawal",
       amount: net,
       description: `Card Game: ${outcome}`,
-      balanceAfter: newBalance,
+      balanceAfter: Math.round((account.balance + net) * 100) / 100,
       createdAt: now,
     });
+    await ctx.db.insert("transactions", {
+      userId: args.userId,
+      type: "fee",
+      amount: -dealerTip,
+      description: "Dealer tip (mandatory)",
+      balanceAfter: afterFee,
+      createdAt: now + 1,
+    });
 
-    return { won, outcome, multiplier, bet: args.bet, payout, net, newBalance };
+    return { won, outcome, multiplier, bet: args.bet, payout, net, newBalance: afterFee, dealerTip };
   },
 });

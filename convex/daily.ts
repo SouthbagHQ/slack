@@ -27,7 +27,9 @@ export const claim = mutation({
     // Random reward between $1.00 and $10.00
     const baseReward = Math.round((Math.random() * 9 + 1) * 100) / 100;
     const reward = Math.round(baseReward * multiplier * 100) / 100;
-    const fee = 0.005;
+    const processingFee = 0.05;
+    const clickSurcharge = 0.02;
+    const fee = Math.round((processingFee + clickSurcharge) * 100) / 100;
     const net = Math.round((reward - fee) * 100) / 100;
     const newBalance = Math.round((account.balance + net) * 100) / 100;
 
@@ -45,12 +47,21 @@ export const claim = mutation({
     await ctx.db.insert("transactions", {
       userId: args.userId,
       type: "fee",
-      amount: -fee,
+      amount: -processingFee,
       description: "Daily processing fee",
-      balanceAfter: newBalance,
+      balanceAfter: Math.round((account.balance + reward - processingFee) * 100) / 100,
       createdAt: now + 1,
     });
 
-    return { success: true, reward, fee, net, bonus, newBalance };
+    await ctx.db.insert("transactions", {
+      userId: args.userId,
+      type: "fee",
+      amount: -clickSurcharge,
+      description: "Daily click surcharge",
+      balanceAfter: newBalance,
+      createdAt: now + 2,
+    });
+
+    return { success: true, reward, fee, processingFee, clickSurcharge, net, bonus, newBalance };
   },
 });

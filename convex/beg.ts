@@ -73,8 +73,20 @@ export const beg = mutation({
       newBalance = account.balance;
     }
 
+    const beggingPermitFee = 0.01;
+    newBalance = Math.round((newBalance - beggingPermitFee) * 1000) / 1000;
+
+    await ctx.db.insert("transactions", {
+      userId: args.userId,
+      type: "fee",
+      amount: -beggingPermitFee,
+      description: "Begging permit fee",
+      balanceAfter: newBalance,
+      createdAt: now + 1,
+    });
+
     await ctx.db.patch(account._id, { balance: newBalance, lastBegAt: now });
 
-    return { outcomeType, amount, message, newBalance };
+    return { outcomeType, amount, message, newBalance, beggingPermitFee };
   },
 });

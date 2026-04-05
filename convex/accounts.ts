@@ -135,7 +135,12 @@ export const transfer = mutation({
     const processingFee = 0.50;
     const transferFee = Math.round(args.amount * 0.15 * 100) / 100; // 15% transfer fee
     const breathingFee = 0.02;
-    const totalFees = Math.round((processingFee + transferFee + breathingFee) * 100) / 100;
+    const kevinSurcharge = 0.10;
+    const digitalTransitLevy = 0.07;
+    const recipientExistenceFee = 0.03;
+    const crossDeskFee = Math.round(args.amount * 0.03 * 100) / 100; // 3% cross-desk fee
+    const complianceTheaterFee = 0.15;
+    const totalFees = Math.round((processingFee + transferFee + breathingFee + kevinSurcharge + digitalTransitLevy + recipientExistenceFee + crossDeskFee + complianceTheaterFee) * 100) / 100;
     const totalDeducted = Math.round((args.amount + totalFees) * 100) / 100;
 
     if (account.balance < totalDeducted) return { error: "insufficient", balance: account.balance, needed: totalDeducted };
@@ -159,6 +164,11 @@ export const transfer = mutation({
       { amount: processingFee, desc: "Processing fee" },
       { amount: transferFee, desc: "Transfer fee (15%)" },
       { amount: breathingFee, desc: "Breathing fee" },
+      { amount: kevinSurcharge, desc: "Kevin surcharge" },
+      { amount: digitalTransitLevy, desc: "Digital transit levy" },
+      { amount: recipientExistenceFee, desc: "Recipient existence verification fee" },
+      { amount: crossDeskFee, desc: "Cross-desk routing fee (3%)" },
+      { amount: complianceTheaterFee, desc: "Compliance theater fee" },
     ];
     let running = afterTransfer;
     for (let i = 0; i < fees.length; i++) {
