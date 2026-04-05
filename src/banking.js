@@ -3097,16 +3097,32 @@ Respond ONLY in this exact JSON format (no markdown, no extra text):
 
     try {
       aiResponse = await chat(aiMessages, env);
-      const parsed = JSON.parse(aiResponse);
-      resultName = parsed.name || "Unknown Combination";
-      resultDescription =
-        parsed.description || "A mysterious fusion of two items.";
+
+      // Extract JSON from response (handle cases where model adds extra text)
+      let parsed;
+      const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error("No JSON found in AI response");
+      }
+
+      // Validate and sanitize fields
+      resultName = (parsed.name || "").trim().slice(0, 100);
+      resultDescription = (parsed.description || "").trim().slice(0, 500);
+
+      if (!resultName) {
+        resultName = "Unknown Combination";
+      }
+      if (!resultDescription) {
+        resultDescription = "A mysterious fusion of two items.";
+      }
     } catch (err) {
       console.error("Error generating combination:", err);
       await client.chat.postEphemeral({
         channel: userId,
         user: userId,
-        text: "Error generating combination. The items rejected each other. [FEE:0.10:Failed combination attempt]",
+        text: "The items rejected each other. Better luck next time. [FEE:0.10:Failed combination attempt]",
       });
 
       // Still charge the failure fee

@@ -393,6 +393,71 @@ export const combine = mutation({
   },
 });
 
+export const combineAI = mutation({
+  args: {
+    userId: v.string(),
+    itemIdA: v.string(),
+    itemIdB: v.string(),
+    resultName: v.string(),
+    resultDescription: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const account = await ctx.db
+      .query("accounts")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+    if (!account) return { error: "no_account" };
+
+    const inventory = account.inventory || [];
+    const newInventory = [...inventory];
+
+    // Find and remove first item
+    const idxA = newInventory.findIndex((i) => i.itemId === args.itemIdA);
+    if (idxA === -1) return { error: "missing_item", itemId: args.itemIdA };
+    newInventory.splice(idxA, 1);
+
+    // Find and remove second item
+    const idxB = newInventory.findIndex((i) => i.itemId === args.itemIdB);
+    if (idxB === -1) return { error: "missing_item", itemId: args.itemIdB };
+    newInventory.splice(idxB, 1);
+
+    // Generate stable itemId for AI combo
+    const generatedId = `combo:ai_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+
+    // Add combined item
+    newInventory.push({
+      itemId: generatedId,
+      name: args.resultName,
+      boughtAt: Date.now(),
+    });
+
+    // Charge combination fee
+    const fee = 0.25;
+    const newBalance = Math.round((account.balance - fee) * 100) / 100;
+    await ctx.db.patch(account._id, {
+      balance: newBalance,
+      inventory: newInventory,
+    });
+    await ctx.db.insert("transactions", {
+      userId: args.userId,
+      type: "fee",
+      amount: -fee,
+      description: `Crafting fee: ${args.resultName}`,
+      balanceAfter: newBalance,
+      createdAt: Date.now(),
+    });
+
+    return {
+      success: true,
+      resultName: args.resultName,
+      resultDescription: args.resultDescription,
+      resultId: generatedId,
+      fee,
+      newBalance,
+    };
+  },
+});
+
 export const useItem = mutation({
   args: {
     userId: v.string(),
