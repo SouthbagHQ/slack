@@ -2975,7 +2975,7 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
     }
 
     // Build item options for dropdowns (limit to 100 for Slack static_select)
-    const itemOptions = combinedItems.slice(0, 100).map((item) => ({
+    const itemOptions = inventory.slice(0, 100).map((item) => ({
       text: {
         type: "plain_text",
         text: (item.name || "Unknown").slice(0, 75).replace(/[^\w\s\-]/g, ""),
