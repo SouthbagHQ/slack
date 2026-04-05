@@ -2976,7 +2976,10 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
 
     // Build item options for dropdowns (limit to 100 for Slack static_select)
     const itemOptions = combinedItems.slice(0, 100).map((item) => ({
-      text: { type: "plain_text", text: item.name },
+      text: {
+        type: "plain_text",
+        text: (item.name || "Unknown").slice(0, 75).replace(/[^\w\s\-]/g, ""),
+      },
       value: item.itemId,
     }));
 
@@ -3230,7 +3233,10 @@ Respond ONLY in this exact JSON format (no markdown, no extra text):
 
     // Build options for item dropdown (limit to 100 for Slack static_select)
     const itemOptions = combinedItems.slice(0, 100).map((item) => ({
-      text: { type: "plain_text", text: item.name },
+      text: {
+        type: "plain_text",
+        text: (item.name || "Unknown").slice(0, 75).replace(/[^\w\s\-]/g, ""),
+      },
       value: item.itemId,
     }));
 
