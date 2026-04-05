@@ -2989,10 +2989,10 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
       private_metadata: JSON.stringify({ userId }),
       blocks: [
         {
-          type: "section",
+          type: "input",
           block_id: "item_a_block",
-          text: { type: "mrkdwn", text: "*First Item*" },
-          accessory: {
+          label: { type: "plain_text", text: "First Item" },
+          element: {
             type: "static_select",
             action_id: "item_a_select",
             placeholder: { type: "plain_text", text: "Choose first item" },
@@ -3000,10 +3000,10 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
           },
         },
         {
-          type: "section",
+          type: "input",
           block_id: "item_b_block",
-          text: { type: "mrkdwn", text: "*Second Item*" },
-          accessory: {
+          label: { type: "plain_text", text: "Second Item" },
+          element: {
             type: "static_select",
             action_id: "item_b_select",
             placeholder: { type: "plain_text", text: "Choose second item" },
