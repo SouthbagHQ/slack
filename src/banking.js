@@ -3344,13 +3344,16 @@ Respond ONLY in this exact JSON format (no markdown, no extra text):
 
     await ack();
 
-    // Call the backend mutation
-    const result = await convex.mutation(api.combine.useItem, {
+    // Call the backend mutation (only include targetUserId if set)
+    const mutationArgs = {
       userId,
       itemId,
       targetType,
-      targetUserId,
-    });
+    };
+    if (targetUserId) {
+      mutationArgs.targetUserId = targetUserId;
+    }
+    const result = await convex.mutation(api.combine.useItem, mutationArgs);
 
     if (result.error === "no_account") {
       await client.chat.postEphemeral({
