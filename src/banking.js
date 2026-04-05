@@ -2958,161 +2958,217 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
       ],
     });
   });
-  // /south-combine - Combine two items into something new
-  app.command("/south-combine", async ({ command, ack, respond }) => {
+  // /south-combine - AI-powered infinite craft system (like Infinite Craft)
+  app.command("/south-combine", async ({ command, ack, client }) => {
     await ack();
     const userId = command.user_id;
-    const text = command.text.trim().toLowerCase();
 
-    if (!text || text === "list" || text === "recipes") {
-      // Show all available recipes
-      const recipes = [
-        "Blahaj + Kevin's Stapler = *Weaponised Blahaj*",
-        "Blahaj + Fire Extinguisher = *Foam Shark*",
-        "Blahaj + Motivational Poster = *Inspirational Shark*",
-        "Kevin's Stapler + Complaint Form = *Stapled Complaint*",
-        "Kevin's Stapler + Employee Handbook = *Legally Binding Handbook*",
-        "Fire Extinguisher + Office Plant = *Foam Plant*",
-        "Fire Extinguisher + Server Rack Dust = *Dust Cannon*",
-        "Kevin's Briefcase + Kevin's Tie = *Kevin's Full Kit*",
-        "Kevin's Briefcase + 2019 Incident Report = *The Full 2019 Dossier*",
-        "Kevin's Coffee Mug + Server Rack Dust = *Kevin's Cursed Brew*",
-        "Broken Clock + Fluorescent Tube = *Time Disruptor*",
-        "Ceiling Tile + Sticky Notes = *The Message Board*",
-        "Office Light Bulb + Network Cable = *Internet Lamp*",
-        "Exit Sign + Break Room Key = *The Way Out*",
-        "Expired Security Badge + Office Key Card = *All-Access Pass*",
-        "Paper Shredder + Kevin's Password = *Shredded Secrets*",
-        "Southbag Mug + Kevin's Coffee Mug = *The Unholy Chalice*",
-        "Whiteboard Marker + Emergency Manual = *The Revised Protocol*",
-        "Desk Drawer Contents + Visitor Badge = *Employee Zero*",
-        "Kevin's Family Photo + Kevin's Nameplate = *Kevin's Identity*",
-        "Water Cooler + Parking Cone = *Traffic Fountain*",
-      ];
-      await respond({
-        response_type: "ephemeral",
-        blocks: [
-          {
-            type: "header",
-            text: { type: "plain_text", text: "Combination Recipes" },
-          },
-          {
-            type: "section",
-            text: { type: "mrkdwn", text: recipes.join("\n") },
-          },
-          {
-            type: "context",
-            elements: [
-              {
-                type: "mrkdwn",
-                text: "_Usage: `/south-combine <item1> + <item2>` — Crafting fee: $0.25. Failed attempts: $0.10. Because even failure costs money._",
-              },
-            ],
-          },
-        ],
-      });
-      return;
-    }
-
-    // Parse "item1 + item2"
-    const parts = text.split("+").map((p) => p.trim());
-    if (parts.length !== 2 || !parts[0] || !parts[1]) {
-      await respond({
-        response_type: "ephemeral",
-        text: "Usage: `/south-combine <item1> + <item2>` or `/south-combine list` to see recipes.\nExample: `/south-combine blahaj + kevins stapler`",
-      });
-      return;
-    }
-
-    // Fuzzy match item names to IDs
+    // Get inventory
     const inventory = await convex.query(api.shop.getInventory, { userId });
     if (!inventory || inventory.length === 0) {
-      await respond({
-        response_type: "ephemeral",
-        text: "Your inventory is empty. Can't combine nothing with nothing. Although we could charge you for trying.",
+      await client.chat.postEphemeral({
+        channel: userId,
+        user: userId,
+        text: "Your inventory is empty. Can't combine nothing with nothing.",
       });
       return;
     }
 
-    const matchItem = (search) => {
-      const s = search.replace(/[^a-z0-9 ]/g, "").trim();
-      // Try exact itemId match first
-      const idMatch = s.replace(/\s+/g, "_");
-      const byId = inventory.find(
-        (i) => i.itemId === idMatch || i.itemId === `combo:${idMatch}`,
-      );
-      if (byId) return byId.itemId;
-      // Try name match
-      const byName = inventory.find((i) =>
-        i.name
-          .toLowerCase()
-          .replace(/[^a-z0-9 ]/g, "")
-          .includes(s),
-      );
-      if (byName) return byName.itemId;
-      // Try partial itemId match
-      const byPartial = inventory.find((i) =>
-        i.itemId.includes(s.replace(/\s+/g, "_")),
-      );
-      if (byPartial) return byPartial.itemId;
-      return null;
+    // Build item options for dropdowns
+    const itemOptions = inventory.map((item) => ({
+      text: { type: "plain_text", text: item.name },
+      value: item.itemId,
+    }));
+
+    const modal = {
+      type: "modal",
+      callback_id: "combine_modal",
+      title: { type: "plain_text", text: "Combine Items" },
+      submit: { type: "plain_text", text: "Combine" },
+      close: { type: "plain_text", text: "Cancel" },
+      private_metadata: JSON.stringify({ userId }),
+      blocks: [
+        {
+          type: "section",
+          block_id: "item_a_block",
+          text: { type: "mrkdwn", text: "*First Item*" },
+          accessory: {
+            type: "static_select",
+            action_id: "item_a_select",
+            placeholder: { type: "plain_text", text: "Choose first item" },
+            options: itemOptions,
+          },
+        },
+        {
+          type: "section",
+          block_id: "item_b_block",
+          text: { type: "mrkdwn", text: "*Second Item*" },
+          accessory: {
+            type: "static_select",
+            action_id: "item_b_select",
+            placeholder: { type: "plain_text", text: "Choose second item" },
+            options: itemOptions,
+          },
+        },
+      ],
     };
 
-    const itemIdA = matchItem(parts[0]);
-    const itemIdB = matchItem(parts[1]);
-
-    if (!itemIdA) {
-      await respond({
-        response_type: "ephemeral",
-        text: `Couldn't find "${parts[0]}" in your inventory. Check \`/south-inventory\`.`,
+    try {
+      await client.views.open({
+        trigger_id: command.trigger_id,
+        view: modal,
       });
-      return;
+    } catch (e) {
+      console.error("Error opening combine modal:", e);
+      await client.chat.postEphemeral({
+        channel: userId,
+        user: userId,
+        text: "Error opening modal. Please try again.",
+      });
+    }
+  });
+
+  // Handle combine_modal submission
+  app.view("combine_modal", async ({ view, ack, client, body }) => {
+    const { userId } = JSON.parse(view.private_metadata);
+    const itemIdA =
+      view.state.values.item_a_block.item_a_select.selected_option?.value;
+    const itemIdB =
+      view.state.values.item_b_block.item_b_select.selected_option?.value;
+
+    // Validate inputs
+    const errors = {};
+    if (!itemIdA) {
+      errors.item_a_block = "Please select first item";
     }
     if (!itemIdB) {
-      await respond({
-        response_type: "ephemeral",
-        text: `Couldn't find "${parts[1]}" in your inventory. Check \`/south-inventory\`.`,
+      errors.item_b_block = "Please select second item";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      await ack({
+        response_action: "errors",
+        errors,
       });
       return;
     }
 
-    const result = await convex.mutation(api.combine.combine, {
+    await ack();
+
+    // Get inventory to find item names
+    const inventory = await convex.query(api.shop.getInventory, { userId });
+    const itemA = inventory.find((i) => i.itemId === itemIdA);
+    const itemB = inventory.find((i) => i.itemId === itemIdB);
+
+    if (!itemA || !itemB) {
+      await client.chat.postEphemeral({
+        channel: userId,
+        user: userId,
+        text: "One of the items is no longer in your inventory.",
+      });
+      return;
+    }
+
+    // Generate combination via AI
+    const aiPrompt = `You are a creative AI in an "Infinite Craft" style game set in the Southbag Online Banking universe. Two office items have been combined.
+
+Generate a creative, humorous new item that results from combining these two things. Keep the Southbag dark humor tone.
+
+Item 1: ${itemA.name}
+Item 2: ${itemB.name}
+
+Respond ONLY in this exact JSON format (no markdown, no extra text):
+{
+  "name": "Name of the new combined item",
+  "description": "A brief 1-2 sentence description with dark Southbag humor"
+}`;
+
+    const aiMessages = [
+      {
+        role: "system",
+        content:
+          "You are a creative AI for an Infinite Craft-like game. Respond ONLY with valid JSON, no other text.",
+      },
+      { role: "user", content: aiPrompt },
+    ];
+
+    let aiResponse;
+    let resultName, resultDescription;
+
+    try {
+      aiResponse = await chat(aiMessages, env);
+      const parsed = JSON.parse(aiResponse);
+      resultName = parsed.name || "Unknown Combination";
+      resultDescription =
+        parsed.description || "A mysterious fusion of two items.";
+    } catch (err) {
+      console.error("Error generating combination:", err);
+      await client.chat.postEphemeral({
+        channel: userId,
+        user: userId,
+        text: "Error generating combination. The items rejected each other. [FEE:0.10:Failed combination attempt]",
+      });
+
+      // Still charge the failure fee
+      await convex.mutation(api.accounts.chargeFee, {
+        userId,
+        amount: 0.1,
+        description: "Failed combination attempt fee",
+      });
+      return;
+    }
+
+    // Call backend to combine items with AI-generated result
+    const result = await convex.mutation(api.combine.combineAI, {
       userId,
       itemIdA,
       itemIdB,
+      resultName,
+      resultDescription,
     });
 
     if (result.error === "no_account") {
-      await respond({
-        response_type: "ephemeral",
-        text: "No account. `/south-open-account` first.",
+      await client.chat.postEphemeral({
+        channel: userId,
+        user: userId,
+        text: "No account.",
       });
       return;
     }
     if (result.error === "missing_item") {
-      await respond({
-        response_type: "ephemeral",
-        text: `You don't have that item anymore. Check \`/south-inventory\`.`,
+      await client.chat.postEphemeral({
+        channel: userId,
+        user: userId,
+        text: "One of the items is no longer in your inventory.",
       });
       return;
     }
-    if (result.error === "no_recipe") {
-      await respond({
-        response_type: "ephemeral",
-        text: `Those items refuse to combine. They looked at each other and said no.\n\nFailed attempt fee: ${formatMoney(result.fee)}\nNew balance: ${formatMoney(result.newBalance)}\n\n_Use \`/south-combine list\` to see what actually works._`,
+    if (result.error) {
+      await client.chat.postEphemeral({
+        channel: userId,
+        user: userId,
+        text: `Error: ${result.error}`,
       });
       return;
     }
 
-    await respond({
-      response_type: "in_channel",
+    const say = async (opts) => {
+      if (typeof opts === "string")
+        opts = { text: opts, channel: ALLOWED_CHANNEL };
+      await client.chat.postMessage({ channel: ALLOWED_CHANNEL, ...opts });
+    };
+
+    await say({
       blocks: [
-        { type: "header", text: { type: "plain_text", text: "ITEM COMBINED" } },
+        {
+          type: "header",
+          text: { type: "plain_text", text: "✨ ITEMS COMBINED" },
+        },
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `<@${userId}> has created: *${result.resultName}*\n\n_${result.description}_`,
+            text: `<@${userId}> combined *${itemA.name}* + *${itemB.name}*\n\n*${result.resultName}*\n_${result.resultDescription}_`,
           },
         },
         {
@@ -3120,7 +3176,7 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
           elements: [
             {
               type: "mrkdwn",
-              text: `_Crafting fee: ${formatMoney(result.fee)} · Use it with \`/south-use ${result.resultName.toLowerCase()} on <target>\`_`,
+              text: `_Crafting fee: ${formatMoney(result.fee)} · New balance: ${formatMoney(result.newBalance)}_`,
             },
           ],
         },
