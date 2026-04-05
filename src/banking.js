@@ -2974,8 +2974,8 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
       return;
     }
 
-    // Build item options for dropdowns
-    const itemOptions = inventory.map((item) => ({
+    // Build item options for dropdowns (limit to 100 for Slack static_select)
+    const itemOptions = combinedItems.slice(0, 100).map((item) => ({
       text: { type: "plain_text", text: item.name },
       value: item.itemId,
     }));
@@ -3228,8 +3228,8 @@ Respond ONLY in this exact JSON format (no markdown, no extra text):
       return;
     }
 
-    // Build options for item dropdown
-    const itemOptions = combinedItems.map((item) => ({
+    // Build options for item dropdown (limit to 100 for Slack static_select)
+    const itemOptions = combinedItems.slice(0, 100).map((item) => ({
       text: { type: "plain_text", text: item.name },
       value: item.itemId,
     }));
