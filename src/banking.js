@@ -3509,6 +3509,274 @@ Respond as the target experiencing this item's effect. Be dramatic and humorous.
       });
     }
   });
+
+  // /south-lottery - Lottery commands
+  app.command("/south-lottery", async ({ command, ack, respond, client }) => {
+    await ack();
+    const userId = command.user_id;
+    const args = command.text.trim().split(/\s+/);
+    const sub = args[0] ? args[0].toLowerCase() : "info";
+
+    if (sub === "buy") {
+      let lottery;
+      try {
+        lottery = await convex.query(api.lottery.getOpen);
+      } catch (e) {
+        lottery = null;
+      }
+
+      if (!lottery) {
+        await respond({
+          response_type: "ephemeral",
+          text: "No lottery running right now.",
+        });
+        return;
+      }
+
+      await client.views.open({
+        trigger_id: command.trigger_id,
+        view: {
+          type: "modal",
+          callback_id: "lottery_buy_modal",
+          private_metadata: JSON.stringify({
+            lotteryId: lottery._id,
+            userId,
+            pickCount: lottery.pickCount,
+            maxNumber: lottery.maxNumber,
+          }),
+          title: { type: "plain_text", text: "Buy Lottery Ticket" },
+          submit: { type: "plain_text", text: "Buy Ticket" },
+          blocks: [
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: `*${lottery.name}*\nTicket price: ${formatMoney(lottery.ticketPrice)}\nPick ${lottery.pickCount} numbers from 1-${lottery.maxNumber}\nJackpot: ${formatMoney(lottery.jackpot)}`,
+              },
+            },
+            {
+              type: "input",
+              block_id: "numbers_block",
+              label: { type: "plain_text", text: `Pick ${lottery.pickCount} numbers (1-${lottery.maxNumber})` },
+              element: {
+                type: "plain_text_input",
+                action_id: "numbers",
+                placeholder: { type: "plain_text", text: "e.g. 3 17 22 41 8" },
+              },
+            },
+          ],
+        },
+      });
+      return;
+    }
+
+    if (sub === "my-tickets") {
+      let lottery;
+      try {
+        lottery = await convex.query(api.lottery.getOpen);
+      } catch (e) {
+        lottery = null;
+      }
+
+      if (!lottery) {
+        await respond({
+          response_type: "ephemeral",
+          text: "No lottery running right now.",
+        });
+        return;
+      }
+
+      let tickets;
+      try {
+        tickets = await convex.query(api.lottery.getUserTickets, {
+          userId,
+          lotteryId: lottery._id,
+        });
+      } catch (e) {
+        tickets = [];
+      }
+
+      if (!tickets || tickets.length === 0) {
+        await respond({
+          response_type: "ephemeral",
+          text: `*${lottery.name}*\n\nYou have no tickets. Use \`/south-lottery buy\` to purchase one.`,
+        });
+        return;
+      }
+
+      const ticketLines = tickets.map(
+        (t, i) => `Ticket ${i + 1}: *${t.numbers.join(", ")}*`,
+      );
+
+      await respond({
+        response_type: "ephemeral",
+        text: `*${lottery.name}* — Your Tickets\n\n${ticketLines.join("\n")}\n\n_${tickets.length} ticket(s). Good luck. You'll need it._`,
+      });
+      return;
+    }
+
+    // Default: info
+    let lottery;
+    try {
+      lottery = await convex.query(api.lottery.getOpen);
+    } catch (e) {
+      lottery = null;
+    }
+
+    if (!lottery) {
+      await respond({
+        response_type: "ephemeral",
+        text: "No lottery running right now. Check back later — Kevin might feel generous. (He won't.)",
+      });
+      return;
+    }
+
+    await respond({
+      response_type: "ephemeral",
+      blocks: [
+        {
+          type: "header",
+          text: { type: "plain_text", text: lottery.name },
+        },
+        {
+          type: "section",
+          fields: [
+            { type: "mrkdwn", text: `*Ticket Price*\n${formatMoney(lottery.ticketPrice)}` },
+            { type: "mrkdwn", text: `*Jackpot*\n${formatMoney(lottery.jackpot)}` },
+            { type: "mrkdwn", text: `*Pick*\n${lottery.pickCount} of ${lottery.maxNumber}` },
+            { type: "mrkdwn", text: `*Status*\nOpen` },
+          ],
+        },
+        {
+          type: "context",
+          elements: [
+            { type: "mrkdwn", text: "`/south-lottery buy` to purchase a ticket · `/south-lottery my-tickets` to view yours" },
+          ],
+        },
+      ],
+    });
+  });
+
+  // Handle lottery buy modal submission
+  app.view("lottery_buy_modal", async ({ view, ack, client }) => {
+    const meta = JSON.parse(view.private_metadata);
+    const { lotteryId, userId, pickCount, maxNumber } = meta;
+    const raw = view.state.values.numbers_block.numbers.value.trim();
+    const numbers = raw.split(/\s+/).map((n) => parseInt(n, 10));
+
+    if (numbers.length !== pickCount) {
+      await ack({
+        response_action: "errors",
+        errors: {
+          numbers_block: `You must pick exactly ${pickCount} numbers. You entered ${numbers.length}.`,
+        },
+      });
+      return;
+    }
+
+    if (numbers.some((n) => isNaN(n) || n < 1 || n > maxNumber)) {
+      await ack({
+        response_action: "errors",
+        errors: {
+          numbers_block: `All numbers must be between 1 and ${maxNumber}.`,
+        },
+      });
+      return;
+    }
+
+    if (new Set(numbers).size !== numbers.length) {
+      await ack({
+        response_action: "errors",
+        errors: {
+          numbers_block: "No duplicate numbers allowed.",
+        },
+      });
+      return;
+    }
+
+    let result;
+    try {
+      result = await convex.mutation(api.lottery.buyTicket, {
+        userId,
+        lotteryId,
+        numbers,
+      });
+    } catch (e) {
+      await ack({
+        response_action: "errors",
+        errors: {
+          numbers_block: `Error: ${e.message || "Something went wrong."}`,
+        },
+      });
+      return;
+    }
+
+    if (result.error === "no_account") {
+      await ack({
+        response_action: "errors",
+        errors: {
+          numbers_block: "You don't have a Southbag account. Use /south-open-account first.",
+        },
+      });
+      return;
+    }
+    if (result.error === "insufficient") {
+      await ack({
+        response_action: "errors",
+        errors: {
+          numbers_block: `Insufficient funds. You have $${result.balance.toFixed(2)} but need $${result.needed.toFixed(2)}.`,
+        },
+      });
+      return;
+    }
+    if (result.error === "frozen") {
+      await ack({
+        response_action: "errors",
+        errors: {
+          numbers_block: "Your account is frozen. No lottery for you.",
+        },
+      });
+      return;
+    }
+    if (result.error === "invalid_numbers") {
+      await ack({
+        response_action: "errors",
+        errors: {
+          numbers_block: result.message || "Invalid numbers.",
+        },
+      });
+      return;
+    }
+    if (result.error) {
+      await ack({
+        response_action: "errors",
+        errors: {
+          numbers_block: `Error: ${result.error}`,
+        },
+      });
+      return;
+    }
+
+    await ack();
+
+    await notifyBalanceChange(
+      client,
+      convex,
+      api,
+      userId,
+      "Lottery ticket",
+      -result.ticketPrice,
+      result.newBalance,
+    );
+
+    try {
+      await client.chat.postEphemeral({
+        channel: userId,
+        user: userId,
+        text: `*Ticket purchased!*\nNumbers: *${numbers.join(", ")}*\nCost: ${formatMoney(result.ticketPrice)}\nNew balance: ${formatMoney(result.newBalance)}\nJackpot: ${formatMoney(result.jackpot)}\n\n_May the odds be ever in Kevin's favor._`,
+      });
+    } catch (e) {}
+  });
 }
 
 async function notifyBalanceChange(

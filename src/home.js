@@ -2,7 +2,7 @@ function formatMoney(n) {
   return `$${n.toFixed(2)}`;
 }
 
-function buildHomeBlocks(account, job, loan, transactions, crypto, insurance) {
+function buildHomeBlocks(account, job, loan, transactions, crypto, insurance, lottery) {
   const blocks = [];
 
   // Header
@@ -219,6 +219,38 @@ function buildHomeBlocks(account, job, loan, transactions, crypto, insurance) {
   }
   blocks.push({ type: 'divider' });
 
+  // Lottery
+  blocks.push({
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: '*Lottery*',
+    },
+  });
+  if (lottery && lottery.status === 'open') {
+    blocks.push({
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Name*\n${lottery.name}` },
+        { type: 'mrkdwn', text: `*Ticket Price*\n${formatMoney(lottery.ticketPrice)}` },
+        { type: 'mrkdwn', text: `*Pick*\n${lottery.pickCount} of ${lottery.maxNumber}` },
+        { type: 'mrkdwn', text: `*Jackpot*\n${formatMoney(lottery.jackpot)}` },
+      ],
+    });
+    blocks.push({
+      type: 'context',
+      elements: [
+        { type: 'mrkdwn', text: 'Use `/south-lottery buy` to purchase a ticket · `/south-lottery my-tickets` to view yours' },
+      ],
+    });
+  } else {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: '_No lottery running._ Check back later — Kevin might feel generous. (He won\'t.)' },
+    });
+  }
+  blocks.push({ type: 'divider' });
+
   // Quick commands reference
   blocks.push({
     type: 'section',
@@ -234,7 +266,7 @@ function buildHomeBlocks(account, job, loan, transactions, crypto, insurance) {
       text: [
         '*Banking:* `/south-balance` · `/south-transfer` · `/south-deposit`',
         '*Income:* `/south-daily` · `/south-job` · `/south-work` · `/south-beg`',
-        '*Gambling:* `/south-coinflip` · `/south-slots` · `/south-gamble`',
+        '*Gambling:* `/south-coinflip` · `/south-slots` · `/south-gamble` · `/south-lottery`',
         '*Crime:* `/south-rob` · `/south-heist`',
         '*Investing:* `/south-crypto` · `/south-upgrade`',
         '*Shopping:* `/south-shop` · `/south-inventory`',

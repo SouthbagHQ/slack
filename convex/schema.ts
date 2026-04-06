@@ -86,4 +86,25 @@ export default defineSchema({
     balanceAfter: v.number(),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  lotteries: defineTable({
+    name: v.string(),
+    ticketPrice: v.number(),
+    maxNumber: v.number(), // e.g. 50 — users pick numbers 1 to maxNumber
+    pickCount: v.number(), // how many numbers to pick (e.g. 5)
+    jackpot: v.number(), // prize pool
+    status: v.string(), // "open" | "drawn" | "cancelled"
+    winningNumbers: v.optional(v.array(v.number())),
+    winnerId: v.optional(v.string()),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    drawnAt: v.optional(v.number()),
+  }),
+
+  lotteryTickets: defineTable({
+    lotteryId: v.id("lotteries"),
+    userId: v.string(),
+    numbers: v.array(v.number()),
+    createdAt: v.number(),
+  }).index("by_lottery", ["lotteryId"]).index("by_user", ["userId"]),
 });

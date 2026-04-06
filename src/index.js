@@ -215,7 +215,7 @@ app.event("app_home_opened", async ({ event, client }) => {
   if (event.tab !== "home") return;
   const userId = event.user;
 
-  const [account, job, loan, transactions, crypto, insurance] =
+  const [account, job, loan, transactions, crypto, insurance, lottery] =
     await Promise.all([
       convex.query(api.accounts.get, { userId }).catch(() => null),
       convex.query(api.jobs.getJob, { userId }).catch(() => null),
@@ -223,6 +223,7 @@ app.event("app_home_opened", async ({ event, client }) => {
       convex.query(api.transactions.list, { userId }).catch(() => []),
       convex.query(api.crypto.portfolio, { userId }).catch(() => null),
       convex.query(api.insurance.getPlan, { userId }).catch(() => null),
+      convex.query(api.lottery.getOpen).catch(() => null),
     ]);
 
   const { buildHomeBlocks } = require("./home");
@@ -233,7 +234,58 @@ app.event("app_home_opened", async ({ event, client }) => {
     transactions,
     crypto,
     insurance,
+    lottery,
   );
+
+  // Admin panel
+  if (userId === "U091KE59H5H") {
+    blocks.push({ type: "divider" });
+    blocks.push({
+      type: "header",
+      text: { type: "plain_text", text: "Admin Panel", emoji: true },
+    });
+
+    if (lottery && lottery.status === "open") {
+      blocks.push({
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Lottery:* ${lottery.name}` },
+          { type: "mrkdwn", text: `*Ticket Price:* $${lottery.ticketPrice.toFixed(2)}` },
+          { type: "mrkdwn", text: `*Jackpot:* $${lottery.jackpot.toFixed(2)}` },
+          { type: "mrkdwn", text: `*Pick:* ${lottery.pickCount} of ${lottery.maxNumber}` },
+        ],
+      });
+      blocks.push({
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: { type: "plain_text", text: "Draw Winner", emoji: true },
+            style: "primary",
+            action_id: "admin_lottery_draw",
+            value: lottery._id,
+          },
+          {
+            type: "button",
+            text: { type: "plain_text", text: "Cancel Lottery", emoji: true },
+            style: "danger",
+            action_id: "admin_lottery_cancel",
+            value: lottery._id,
+          },
+        ],
+      });
+    } else {
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: "_No active lottery._" },
+        accessory: {
+          type: "button",
+          text: { type: "plain_text", text: "Create Lottery", emoji: true },
+          action_id: "admin_lottery_create",
+        },
+      });
+    }
+  }
 
   await client.views.publish({
     user_id: userId,
@@ -764,6 +816,229 @@ app.view(
     }
   },
 );
+
+// --- Lottery admin handlers ---
+async function refreshAdminHome(client) {
+  const userId = "U091KE59H5H";
+  const [account, job, loan, transactions, crypto, insurance, lottery] =
+    await Promise.all([
+      convex.query(api.accounts.get, { userId }).catch(() => null),
+      convex.query(api.jobs.getJob, { userId }).catch(() => null),
+      convex.query(api.loans.check, { userId }).catch(() => null),
+      convex.query(api.transactions.list, { userId }).catch(() => []),
+      convex.query(api.crypto.portfolio, { userId }).catch(() => null),
+      convex.query(api.insurance.getPlan, { userId }).catch(() => null),
+      convex.query(api.lottery.getOpen).catch(() => null),
+    ]);
+
+  const { buildHomeBlocks } = require("./home");
+  const blocks = buildHomeBlocks(
+    account, job, loan, transactions, crypto, insurance, lottery,
+  );
+
+  // Admin panel
+  blocks.push({ type: "divider" });
+  blocks.push({
+    type: "header",
+    text: { type: "plain_text", text: "Admin Panel", emoji: true },
+  });
+
+  if (lottery && lottery.status === "open") {
+    blocks.push({
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Lottery:* ${lottery.name}` },
+        { type: "mrkdwn", text: `*Ticket Price:* $${lottery.ticketPrice.toFixed(2)}` },
+        { type: "mrkdwn", text: `*Jackpot:* $${lottery.jackpot.toFixed(2)}` },
+        { type: "mrkdwn", text: `*Pick:* ${lottery.pickCount} of ${lottery.maxNumber}` },
+      ],
+    });
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Draw Winner", emoji: true },
+          style: "primary",
+          action_id: "admin_lottery_draw",
+          value: lottery._id,
+        },
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Cancel Lottery", emoji: true },
+          style: "danger",
+          action_id: "admin_lottery_cancel",
+          value: lottery._id,
+        },
+      ],
+    });
+  } else {
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: "_No active lottery._" },
+      accessory: {
+        type: "button",
+        text: { type: "plain_text", text: "Create Lottery", emoji: true },
+        action_id: "admin_lottery_create",
+      },
+    });
+  }
+
+  await client.views.publish({
+    user_id: userId,
+    view: { type: "home", blocks },
+  });
+}
+
+app.action("admin_lottery_create", async ({ body, ack, client }) => {
+  await ack();
+  await client.views.open({
+    trigger_id: body.trigger_id,
+    view: {
+      type: "modal",
+      callback_id: "lottery_create_modal",
+      title: { type: "plain_text", text: "Create Lottery" },
+      submit: { type: "plain_text", text: "Create" },
+      blocks: [
+        {
+          type: "input",
+          block_id: "name_block",
+          label: { type: "plain_text", text: "Lottery Name" },
+          element: {
+            type: "plain_text_input",
+            action_id: "name",
+            placeholder: { type: "plain_text", text: "e.g. Kevin's Big Draw" },
+          },
+        },
+        {
+          type: "input",
+          block_id: "price_block",
+          label: { type: "plain_text", text: "Ticket Price" },
+          element: {
+            type: "number_input",
+            action_id: "price",
+            is_decimal_allowed: true,
+            placeholder: { type: "plain_text", text: "e.g. 5.00" },
+          },
+        },
+        {
+          type: "input",
+          block_id: "max_block",
+          label: { type: "plain_text", text: "Max Number" },
+          element: {
+            type: "number_input",
+            action_id: "max_number",
+            is_decimal_allowed: false,
+            placeholder: { type: "plain_text", text: "e.g. 50" },
+          },
+        },
+        {
+          type: "input",
+          block_id: "pick_block",
+          label: { type: "plain_text", text: "Pick Count" },
+          element: {
+            type: "number_input",
+            action_id: "pick_count",
+            is_decimal_allowed: false,
+            placeholder: { type: "plain_text", text: "e.g. 5" },
+          },
+        },
+        {
+          type: "input",
+          block_id: "jackpot_block",
+          label: { type: "plain_text", text: "Starting Jackpot" },
+          element: {
+            type: "number_input",
+            action_id: "jackpot",
+            is_decimal_allowed: true,
+            placeholder: { type: "plain_text", text: "e.g. 100.00" },
+          },
+        },
+      ],
+    },
+  });
+});
+
+app.view("lottery_create_modal", async ({ view, ack, client }) => {
+  await ack();
+  const vals = view.state.values;
+  const name = vals.name_block.name.value;
+  const ticketPrice = parseFloat(vals.price_block.price.value);
+  const maxNumber = parseInt(vals.max_block.max_number.value, 10);
+  const pickCount = parseInt(vals.pick_block.pick_count.value, 10);
+  const jackpot = parseFloat(vals.jackpot_block.jackpot.value);
+
+  await convex.mutation(api.lottery.create, {
+    name,
+    ticketPrice,
+    maxNumber,
+    pickCount,
+    jackpot,
+    createdBy: "U091KE59H5H",
+  });
+
+  try {
+    await app.client.chat.postMessage({
+      channel: ALLOWED_CHANNEL,
+      text: `*NEW LOTTERY: ${name}*\n\nTicket price: $${ticketPrice.toFixed(2)}\nPick ${pickCount} numbers from 1-${maxNumber}\nStarting jackpot: $${jackpot.toFixed(2)}\n\nUse \`/south-lottery buy\` to get your ticket!`,
+    });
+  } catch (e) {
+    console.error("Error posting lottery announcement:", e);
+  }
+
+  await refreshAdminHome(client);
+});
+
+app.action("admin_lottery_draw", async ({ action, ack, client }) => {
+  await ack();
+  const lotteryId = action.value;
+
+  try {
+    const result = await convex.mutation(api.lottery.draw, { lotteryId });
+
+    if (result.winnerId) {
+      await app.client.chat.postMessage({
+        channel: ALLOWED_CHANNEL,
+        text: `*LOTTERY DRAWN!*\n\nWinning numbers: *${result.winningNumbers.join(", ")}*\n\n*Winner:* <@${result.winnerId}> (matched ${result.matchCount}/${result.winningNumbers.length})\n*Payout:* $${result.jackpot.toFixed(2)}\n\n_Congratulations. Don't spend it all in one place._`,
+      });
+      await notifyBalanceChange(
+        client,
+        convex,
+        api,
+        result.winnerId,
+        "Lottery jackpot",
+        result.jackpot,
+        result.jackpot,
+      );
+    } else {
+      await app.client.chat.postMessage({
+        channel: ALLOWED_CHANNEL,
+        text: `*LOTTERY DRAWN!*\n\nWinning numbers: *${result.winningNumbers.join(", ")}*\n\n*No winner.* The jackpot goes back to Kevin. As intended.`,
+      });
+    }
+  } catch (e) {
+    console.error("Error drawing lottery:", e);
+  }
+
+  await refreshAdminHome(client);
+});
+
+app.action("admin_lottery_cancel", async ({ action, ack, client }) => {
+  await ack();
+  const lotteryId = action.value;
+
+  try {
+    const result = await convex.mutation(api.lottery.cancel, { lotteryId });
+    await app.client.chat.postMessage({
+      channel: ALLOWED_CHANNEL,
+      text: `*LOTTERY CANCELLED*\n\nThe lottery has been cancelled. ${result.refunded} ticket(s) fully refunded.`,
+    });
+  } catch (e) {
+    console.error("Error cancelling lottery:", e);
+  }
+
+  await refreshAdminHome(client);
+});
 
 // --- Start ---
 (async () => {
