@@ -204,11 +204,27 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
       return;
     }
 
-    const recipient = parts.slice(1).join(" ");
+    const recipientRaw = parts.slice(1).join(" ");
+    const recipientMatch = recipientRaw.match(/^<@([A-Z0-9]+)(\|[^>]*)?>$/);
+    if (!recipientMatch) {
+      await respond({
+        response_type: "ephemeral",
+        text: "You need to @mention a valid user. Usage: `/south-transfer 5.00 @someone`",
+      });
+      return;
+    }
+    const recipientId = recipientMatch[1];
+    if (recipientId === userId) {
+      await respond({
+        response_type: "ephemeral",
+        text: "You can't transfer money to yourself. That's not how banking works. (Well, maybe at Southbag it could be, but no.)",
+      });
+      return;
+    }
     const result = await convex.mutation(api.accounts.transfer, {
       userId,
       amount,
-      recipient,
+      recipientId,
     });
 
     if (result.error === "no_account") {
@@ -232,6 +248,13 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
       });
       return;
     }
+    if (result.error === "recipient_no_account") {
+      await respond({
+        response_type: "ephemeral",
+        text: `<@${recipientId}> doesn't have a Southbag account. They should use \`/south-open-account\` first. We can't just throw money into the void. (Well, we could, but that's what fees are for.)`,
+      });
+      return;
+    }
 
     const feeLines = result.feeBreakdown
       .map((f) => `• ${f.desc}: -${formatMoney(f.amount)}`)
@@ -242,7 +265,7 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
       convex,
       api,
       userId,
-      `Transfer to ${recipient}`,
+      `Transfer to <@${recipientId}>`,
       -(result.amount + result.fees),
       result.newBalance,
     );
@@ -258,7 +281,7 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `*Sent:* ${formatMoney(result.amount)} to ${recipient}\n\n*Fees applied:*\n${feeLines}\n*Total fees:* ${formatMoney(result.fees)}\n\n*New balance:* ${formatMoney(result.newBalance)}`,
+            text: `*Sent:* ${formatMoney(result.amount)} to <@${recipientId}>\n\n*Fees applied:*\n${feeLines}\n*Total fees:* ${formatMoney(result.fees)}\n\n*New balance:* ${formatMoney(result.newBalance)}`,
           },
         },
         {
@@ -266,7 +289,7 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
           elements: [
             {
               type: "mrkdwn",
-              text: `_The recipient may or may not receive this. We make no guarantees._`,
+              text: `_The recipient received ${formatMoney(result.recipientReceived)}. You're welcome._`,
             },
           ],
         },

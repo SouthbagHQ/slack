@@ -121,7 +121,7 @@ export const transfer = mutation({
   args: {
     userId: v.string(),
     amount: v.number(),
-    recipient: v.string(),
+    recipientId: v.string(),
   },
   handler: async (ctx, args) => {
     const account = await ctx.db
@@ -130,6 +130,12 @@ export const transfer = mutation({
       .first();
     if (!account) return { error: "no_account" };
     if (account.status === "frozen") return { error: "frozen" };
+
+    const recipientAccount = await ctx.db
+      .query("accounts")
+      .withIndex("by_user", (q) => q.eq("userId", args.recipientId))
+      .first();
+    if (!recipientAccount) return { error: "recipient_no_account" };
 
     // Calculate absurd fees
     const processingFee = 0.50;
@@ -149,12 +155,12 @@ export const transfer = mutation({
     const afterTransfer = Math.round((account.balance - args.amount) * 100) / 100;
     const afterFees = Math.round((afterTransfer - totalFees) * 100) / 100;
 
-    // Record the transfer
+    // Record the sender's transfer
     await ctx.db.insert("transactions", {
       userId: args.userId,
       type: "transfer",
       amount: -args.amount,
-      description: `Transfer to ${args.recipient}`,
+      description: `Transfer to <@${args.recipientId}>`,
       balanceAfter: afterTransfer,
       createdAt: now,
     });
@@ -183,7 +189,20 @@ export const transfer = mutation({
       });
     }
 
+    // Deduct from sender
     await ctx.db.patch(account._id, { balance: afterFees });
+
+    // Credit recipient
+    const recipientNewBalance = Math.round((recipientAccount.balance + args.amount) * 100) / 100;
+    await ctx.db.patch(recipientAccount._id, { balance: recipientNewBalance });
+    await ctx.db.insert("transactions", {
+      userId: args.recipientId,
+      type: "transfer",
+      amount: args.amount,
+      description: `Transfer from <@${args.userId}>`,
+      balanceAfter: recipientNewBalance,
+      createdAt: now,
+    });
 
     return {
       success: true,
@@ -191,6 +210,7 @@ export const transfer = mutation({
       fees: totalFees,
       feeBreakdown: fees,
       newBalance: afterFees,
+      recipientReceived: args.amount,
     };
   },
 });
