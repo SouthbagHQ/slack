@@ -11,6 +11,7 @@ const { registerAppHome } = require("./home");
 const ALLOWED_CHANNEL = "C0AH7GB4V6X";
 
 const shopBuyers = new Set(); // Track users who bought something during their shop session
+let botUserId = null; // Populated at startup
 
 const convex = new ConvexHttpClient(process.env.CONVEX_URL);
 
@@ -25,6 +26,28 @@ const env = {
   HCAI: process.env.HCAI,
 };
 
+// --- Ban check helper ---
+async function checkBanned(userId, client, channel) {
+  try {
+    const banStatus = await convex.query(api.admin.checkBan, { userId });
+    if (banStatus.banned) {
+      let msg = "Your account is suspended. Do not contact us. — Kevin";
+      if (banStatus.expiry) {
+        msg = `Your account is suspended until ${new Date(banStatus.expiry).toLocaleDateString()}. Do not contact us. — Kevin`;
+      }
+      // If ban has expired, treat as not banned
+      if (banStatus.expiry && Date.now() > banStatus.expiry) {
+        return false;
+      }
+      try {
+        await client.chat.postEphemeral({ channel, user: userId, text: msg });
+      } catch (e) {}
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
 // --- Main message handler ---
 async function handleMessage({ event, client }) {
   if (event.bot_id || event.subtype) return;
@@ -35,6 +58,8 @@ async function handleMessage({ event, client }) {
   const channelId = event.channel;
   const threadTs = event.thread_ts || event.ts;
   const userId = event.user;
+
+  if (await checkBanned(userId, client, channelId)) return;
 
   const say = async (opts) => {
     if (typeof opts === "string") opts = { text: opts, channel: channelId };
@@ -195,7 +220,7 @@ app.event("app_mention", async (args) => {
 });
 
 app.event("message", async (args) => {
-  const { event } = args;
+  const { event, client } = args;
   if (event.channel_type === "im") {
     await handleMessage(args);
     return;
@@ -206,14 +231,54 @@ app.event("message", async (args) => {
     !event.bot_id &&
     !event.subtype
   ) {
-    await handleMessage(args);
+    // Only reply in threads if the bot was mentioned in the parent message,
+    // or if directly mentioned in this specific reply
+    const mentionPattern = botUserId ? `<@${botUserId}>` : null;
+    const mentionedInReply = mentionPattern && (event.text || "").includes(mentionPattern);
+
+    if (mentionedInReply) {
+      await handleMessage(args);
+      return;
+    }
+
+    // Check if bot was mentioned in the parent (top-level) message
+    try {
+      const parentResult = await client.conversations.replies({
+        channel: event.channel,
+        ts: event.thread_ts,
+        limit: 1,
+        inclusive: true,
+      });
+      const parentMsg = parentResult.messages && parentResult.messages[0];
+      if (parentMsg && mentionPattern && (parentMsg.text || "").includes(mentionPattern)) {
+        await handleMessage(args);
+      }
+    } catch (e) {}
   }
 });
 
-// --- App Home ---
+// --- App Home (admin-only) ---
 app.event("app_home_opened", async ({ event, client }) => {
   if (event.tab !== "home") return;
   const userId = event.user;
+
+  const isAdmin = await convex.query(api.admin.isAdmin, { userId });
+
+  if (!isAdmin) {
+    await client.views.publish({
+      user_id: userId,
+      view: {
+        type: "home",
+        blocks: [
+          {
+            type: "section",
+            text: { type: "mrkdwn", text: "Nothing to see here." },
+          },
+        ],
+      },
+    });
+    return;
+  }
 
   const [account, job, loan, transactions, crypto, insurance, lottery] =
     await Promise.all([
@@ -238,54 +303,7 @@ app.event("app_home_opened", async ({ event, client }) => {
   );
 
   // Admin panel
-  if (userId === "U091KE59H5H") {
-    blocks.push({ type: "divider" });
-    blocks.push({
-      type: "header",
-      text: { type: "plain_text", text: "Admin Panel", emoji: true },
-    });
-
-    if (lottery && lottery.status === "open") {
-      blocks.push({
-        type: "section",
-        fields: [
-          { type: "mrkdwn", text: `*Lottery:* ${lottery.name}` },
-          { type: "mrkdwn", text: `*Ticket Price:* $${lottery.ticketPrice.toFixed(2)}` },
-          { type: "mrkdwn", text: `*Jackpot:* $${lottery.jackpot.toFixed(2)}` },
-          { type: "mrkdwn", text: `*Pick:* ${lottery.pickCount} of ${lottery.maxNumber}` },
-        ],
-      });
-      blocks.push({
-        type: "actions",
-        elements: [
-          {
-            type: "button",
-            text: { type: "plain_text", text: "Draw Winner", emoji: true },
-            style: "primary",
-            action_id: "admin_lottery_draw",
-            value: lottery._id,
-          },
-          {
-            type: "button",
-            text: { type: "plain_text", text: "Cancel Lottery", emoji: true },
-            style: "danger",
-            action_id: "admin_lottery_cancel",
-            value: lottery._id,
-          },
-        ],
-      });
-    } else {
-      blocks.push({
-        type: "section",
-        text: { type: "mrkdwn", text: "_No active lottery._" },
-        accessory: {
-          type: "button",
-          text: { type: "plain_text", text: "Create Lottery", emoji: true },
-          action_id: "admin_lottery_create",
-        },
-      });
-    }
-  }
+  blocks.push(...buildAdminPanelBlocks(lottery));
 
   await client.views.publish({
     user_id: userId,
@@ -298,7 +316,12 @@ app.event("app_home_opened", async ({ event, client }) => {
 const boltApp = {
   command: (name, handler) => {
     app.command(name, async ({ command, ack, respond, client }) => {
-      await handler({ command, ack, respond, client });
+      await ack();
+      if (await checkBanned(command.user_id, client, command.channel_id)) {
+        await respond({ response_type: "ephemeral", text: "Your account is suspended. Do not contact us. — Kevin" });
+        return;
+      }
+      await handler({ command, ack: async () => {}, respond, client });
     });
   },
   view: (callbackIdOrConfig, handler) => {
@@ -817,32 +840,34 @@ app.view(
   },
 );
 
-// --- Lottery admin handlers ---
-async function refreshAdminHome(client) {
-  const userId = "U091KE59H5H";
-  const [account, job, loan, transactions, crypto, insurance, lottery] =
-    await Promise.all([
-      convex.query(api.accounts.get, { userId }).catch(() => null),
-      convex.query(api.jobs.getJob, { userId }).catch(() => null),
-      convex.query(api.loans.check, { userId }).catch(() => null),
-      convex.query(api.transactions.list, { userId }).catch(() => []),
-      convex.query(api.crypto.portfolio, { userId }).catch(() => null),
-      convex.query(api.insurance.getPlan, { userId }).catch(() => null),
-      convex.query(api.lottery.getOpen).catch(() => null),
-    ]);
-
-  const { buildHomeBlocks } = require("./home");
-  const blocks = buildHomeBlocks(
-    account, job, loan, transactions, crypto, insurance, lottery,
-  );
-
-  // Admin panel
+// --- Admin panel block builder ---
+function buildAdminPanelBlocks(lottery) {
+  const blocks = [];
   blocks.push({ type: "divider" });
   blocks.push({
     type: "header",
     text: { type: "plain_text", text: "Admin Panel", emoji: true },
   });
 
+  // Moderation
+  blocks.push({
+    type: "actions",
+    elements: [
+      {
+        type: "button",
+        text: { type: "plain_text", text: "Warn User", emoji: true },
+        action_id: "admin_warn_open",
+      },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "Ban User", emoji: true },
+        style: "danger",
+        action_id: "admin_ban_open",
+      },
+    ],
+  });
+
+  // Lottery
   if (lottery && lottery.status === "open") {
     blocks.push({
       type: "section",
@@ -883,6 +908,31 @@ async function refreshAdminHome(client) {
       },
     });
   }
+
+  return blocks;
+}
+
+// --- Lottery admin handlers ---
+async function refreshAdminHome(client, adminUserId) {
+  const userId = adminUserId;
+  const [account, job, loan, transactions, crypto, insurance, lottery] =
+    await Promise.all([
+      convex.query(api.accounts.get, { userId }).catch(() => null),
+      convex.query(api.jobs.getJob, { userId }).catch(() => null),
+      convex.query(api.loans.check, { userId }).catch(() => null),
+      convex.query(api.transactions.list, { userId }).catch(() => []),
+      convex.query(api.crypto.portfolio, { userId }).catch(() => null),
+      convex.query(api.insurance.getPlan, { userId }).catch(() => null),
+      convex.query(api.lottery.getOpen).catch(() => null),
+    ]);
+
+  const { buildHomeBlocks } = require("./home");
+  const blocks = buildHomeBlocks(
+    account, job, loan, transactions, crypto, insurance, lottery,
+  );
+
+  // Admin panel
+  blocks.push(...buildAdminPanelBlocks(lottery));
 
   await client.views.publish({
     user_id: userId,
@@ -959,8 +1009,9 @@ app.action("admin_lottery_create", async ({ body, ack, client }) => {
   });
 });
 
-app.view("lottery_create_modal", async ({ view, ack, client }) => {
+app.view("lottery_create_modal", async ({ view, ack, client, body }) => {
   await ack();
+  const adminUserId = body.user.id;
   const vals = view.state.values;
   const name = vals.name_block.name.value;
   const ticketPrice = parseFloat(vals.price_block.price.value);
@@ -974,7 +1025,7 @@ app.view("lottery_create_modal", async ({ view, ack, client }) => {
     maxNumber,
     pickCount,
     jackpot,
-    createdBy: "U091KE59H5H",
+    createdBy: adminUserId,
   });
 
   try {
@@ -986,11 +1037,12 @@ app.view("lottery_create_modal", async ({ view, ack, client }) => {
     console.error("Error posting lottery announcement:", e);
   }
 
-  await refreshAdminHome(client);
+  await refreshAdminHome(client, adminUserId);
 });
 
-app.action("admin_lottery_draw", async ({ action, ack, client }) => {
+app.action("admin_lottery_draw", async ({ action, ack, client, body }) => {
   await ack();
+  const adminUserId = body.user.id;
   const lotteryId = action.value;
 
   try {
@@ -1020,11 +1072,12 @@ app.action("admin_lottery_draw", async ({ action, ack, client }) => {
     console.error("Error drawing lottery:", e);
   }
 
-  await refreshAdminHome(client);
+  await refreshAdminHome(client, adminUserId);
 });
 
-app.action("admin_lottery_cancel", async ({ action, ack, client }) => {
+app.action("admin_lottery_cancel", async ({ action, ack, client, body }) => {
   await ack();
+  const adminUserId = body.user.id;
   const lotteryId = action.value;
 
   try {
@@ -1037,11 +1090,204 @@ app.action("admin_lottery_cancel", async ({ action, ack, client }) => {
     console.error("Error cancelling lottery:", e);
   }
 
-  await refreshAdminHome(client);
+  await refreshAdminHome(client, adminUserId);
+});
+
+// --- Admin warn/ban modals (App Home) ---
+app.action("admin_warn_open", async ({ ack, body, client }) => {
+  await ack();
+  await client.views.open({
+    trigger_id: body.trigger_id,
+    view: {
+      type: "modal",
+      callback_id: "admin_warn_modal",
+      title: { type: "plain_text", text: "Warn User" },
+      submit: { type: "plain_text", text: "Generate Warning" },
+      blocks: [
+        {
+          type: "input",
+          block_id: "user_block",
+          label: { type: "plain_text", text: "User" },
+          element: {
+            type: "users_select",
+            action_id: "target_user",
+            placeholder: { type: "plain_text", text: "Select a user" },
+          },
+        },
+        {
+          type: "input",
+          block_id: "reason_block",
+          label: { type: "plain_text", text: "Reason" },
+          element: {
+            type: "plain_text_input",
+            action_id: "reason",
+            placeholder: { type: "plain_text", text: "Why are they being warned?" },
+          },
+        },
+      ],
+    },
+  });
+});
+
+app.view("admin_warn_modal", async ({ view, ack, client, body }) => {
+  await ack();
+  const adminId = body.user.id;
+  const targetId = view.state.values.user_block.target_user.selected_user;
+  const reason = view.state.values.reason_block.reason.value || "No reason provided";
+
+  const warnResult = await convex.mutation(api.admin.warn, { userId: targetId, reason });
+  if (warnResult.error) {
+    try {
+      await client.chat.postEphemeral({ channel: adminId, user: adminId, text: `Error: ${warnResult.error}` });
+    } catch (e) {}
+    return;
+  }
+
+  const kevinWarningPrompt = `You are Kevin, the CEO of Southbag Slack Banking. You are writing a formal warning letter to a user. Your tone is formally worded but passive-aggressive. You use corporate jargon. You are deeply disappointed but not surprised. You sign off with "Your money is probably fine." Keep it to one short paragraph. This is strike ${warnResult.strikes} for the user. The reason for this warning is: ${reason}`;
+
+  try {
+    const warningMessage = await chat(
+      [{ role: "system", content: kevinWarningPrompt }, { role: "user", content: `Write a warning message for the user about: ${reason}` }],
+      env,
+    );
+
+    await client.chat.postEphemeral({
+      channel: adminId,
+      user: adminId,
+      text: `*Preview warning for <@${targetId}> (Strike ${warnResult.strikes}):*\n\n${warningMessage}`,
+      blocks: [
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: `*Preview warning for <@${targetId}> (Strike ${warnResult.strikes}):*\n\n${warningMessage}` },
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: { type: "plain_text", text: "Approve & Send", emoji: true },
+              style: "primary",
+              action_id: "approve_warn",
+              value: JSON.stringify({ targetId, message: warningMessage }),
+            },
+          ],
+        },
+      ],
+    });
+  } catch (e) {
+    console.error("Error generating warning:", e);
+  }
+});
+
+app.action("admin_ban_open", async ({ ack, body, client }) => {
+  await ack();
+  await client.views.open({
+    trigger_id: body.trigger_id,
+    view: {
+      type: "modal",
+      callback_id: "admin_ban_modal",
+      title: { type: "plain_text", text: "Ban User" },
+      submit: { type: "plain_text", text: "Generate Ban Notice" },
+      blocks: [
+        {
+          type: "input",
+          block_id: "user_block",
+          label: { type: "plain_text", text: "User" },
+          element: {
+            type: "users_select",
+            action_id: "target_user",
+            placeholder: { type: "plain_text", text: "Select a user" },
+          },
+        },
+        {
+          type: "input",
+          block_id: "duration_block",
+          label: { type: "plain_text", text: "Duration (days, or \"permanent\")" },
+          element: {
+            type: "plain_text_input",
+            action_id: "duration",
+            placeholder: { type: "plain_text", text: "e.g. 7 or permanent" },
+          },
+        },
+        {
+          type: "input",
+          block_id: "reason_block",
+          label: { type: "plain_text", text: "Reason" },
+          element: {
+            type: "plain_text_input",
+            action_id: "reason",
+            placeholder: { type: "plain_text", text: "Why are they being banned?" },
+          },
+        },
+      ],
+    },
+  });
+});
+
+app.view("admin_ban_modal", async ({ view, ack, client, body }) => {
+  const adminId = body.user.id;
+  const targetId = view.state.values.user_block.target_user.selected_user;
+  const durationRaw = view.state.values.duration_block.duration.value || "";
+  const reason = view.state.values.reason_block.reason.value || "No reason provided";
+
+  const isPermanent = durationRaw.toLowerCase() === "permanent";
+  let banExpiry;
+  if (!isPermanent) {
+    const days = parseInt(durationRaw, 10);
+    if (isNaN(days) || days <= 0) {
+      await ack({ response_action: "errors", errors: { duration_block: "Must be a number of days or \"permanent\"." } });
+      return;
+    }
+    banExpiry = Date.now() + days * 24 * 60 * 60 * 1000;
+  }
+  await ack();
+
+  const durationText = isPermanent ? "permanent" : `${durationRaw} day(s)`;
+
+  const kevinBanPrompt = `You are Kevin, the CEO of Southbag Slack Banking. You are writing a ban notice to a user. Your tone is formally worded but passive-aggressive. You use corporate jargon. You are deeply disappointed but not surprised. The ban is ${durationText}. You sign off with "Your money is probably fine." Keep it to one short paragraph. The reason for this ban is: ${reason}`;
+
+  try {
+    const banMessage = await chat(
+      [{ role: "system", content: kevinBanPrompt }, { role: "user", content: `Write a ban notice for the user about: ${reason}` }],
+      env,
+    );
+
+    await client.chat.postEphemeral({
+      channel: adminId,
+      user: adminId,
+      text: `*Preview ban for <@${targetId}> (${durationText}):*\n\n${banMessage}`,
+      blocks: [
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: `*Preview ban for <@${targetId}> (${durationText}):*\n\n${banMessage}` },
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: { type: "plain_text", text: "Approve & Send", emoji: true },
+              style: "primary",
+              action_id: "approve_ban",
+              value: JSON.stringify({ targetId, message: banMessage, reason, banExpiry }),
+            },
+          ],
+        },
+      ],
+    });
+  } catch (e) {
+    console.error("Error generating ban message:", e);
+  }
 });
 
 // --- Start ---
 (async () => {
   await app.start();
+  try {
+    const authResult = await app.client.auth.test();
+    botUserId = authResult.user_id;
+  } catch (e) {
+    console.error("Failed to fetch bot user ID:", e);
+  }
   console.log("⚡ Southbag bot is running (Socket Mode)");
 })();
