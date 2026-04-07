@@ -280,30 +280,8 @@ app.event("app_home_opened", async ({ event, client }) => {
     return;
   }
 
-  const [account, job, loan, transactions, crypto, insurance, lottery] =
-    await Promise.all([
-      convex.query(api.accounts.get, { userId }).catch(() => null),
-      convex.query(api.jobs.getJob, { userId }).catch(() => null),
-      convex.query(api.loans.check, { userId }).catch(() => null),
-      convex.query(api.transactions.list, { userId }).catch(() => []),
-      convex.query(api.crypto.portfolio, { userId }).catch(() => null),
-      convex.query(api.insurance.getPlan, { userId }).catch(() => null),
-      convex.query(api.lottery.getOpen).catch(() => null),
-    ]);
-
-  const { buildHomeBlocks } = require("./home");
-  const blocks = buildHomeBlocks(
-    account,
-    job,
-    loan,
-    transactions,
-    crypto,
-    insurance,
-    lottery,
-  );
-
-  // Admin panel
-  blocks.push(...buildAdminPanelBlocks(lottery));
+  const lottery = await convex.query(api.lottery.getOpen).catch(() => null);
+  const blocks = buildAdminPanelBlocks(lottery);
 
   await client.views.publish({
     user_id: userId,
@@ -843,16 +821,31 @@ app.view(
 // --- Admin panel block builder ---
 function buildAdminPanelBlocks(lottery) {
   const blocks = [];
-  blocks.push({ type: "divider" });
   blocks.push({
     type: "header",
-    text: { type: "plain_text", text: "Admin Panel", emoji: true },
+    text: { type: "plain_text", text: "Southbag Admin Panel", emoji: true },
   });
+  blocks.push({
+    type: "context",
+    elements: [
+      { type: "mrkdwn", text: "_Kevin is watching._" },
+    ],
+  });
+  blocks.push({ type: "divider" });
 
   // Moderation
   blocks.push({
+    type: "section",
+    text: { type: "mrkdwn", text: "*User Management*" },
+  });
+  blocks.push({
     type: "actions",
     elements: [
+      {
+        type: "button",
+        text: { type: "plain_text", text: "Inspect User", emoji: true },
+        action_id: "admin_inspect_open",
+      },
       {
         type: "button",
         text: { type: "plain_text", text: "Warn User", emoji: true },
@@ -866,6 +859,7 @@ function buildAdminPanelBlocks(lottery) {
       },
     ],
   });
+  blocks.push({ type: "divider" });
 
   // Lottery
   if (lottery && lottery.status === "open") {
@@ -914,28 +908,11 @@ function buildAdminPanelBlocks(lottery) {
 
 // --- Lottery admin handlers ---
 async function refreshAdminHome(client, adminUserId) {
-  const userId = adminUserId;
-  const [account, job, loan, transactions, crypto, insurance, lottery] =
-    await Promise.all([
-      convex.query(api.accounts.get, { userId }).catch(() => null),
-      convex.query(api.jobs.getJob, { userId }).catch(() => null),
-      convex.query(api.loans.check, { userId }).catch(() => null),
-      convex.query(api.transactions.list, { userId }).catch(() => []),
-      convex.query(api.crypto.portfolio, { userId }).catch(() => null),
-      convex.query(api.insurance.getPlan, { userId }).catch(() => null),
-      convex.query(api.lottery.getOpen).catch(() => null),
-    ]);
-
-  const { buildHomeBlocks } = require("./home");
-  const blocks = buildHomeBlocks(
-    account, job, loan, transactions, crypto, insurance, lottery,
-  );
-
-  // Admin panel
-  blocks.push(...buildAdminPanelBlocks(lottery));
+  const lottery = await convex.query(api.lottery.getOpen).catch(() => null);
+  const blocks = buildAdminPanelBlocks(lottery);
 
   await client.views.publish({
-    user_id: userId,
+    user_id: adminUserId,
     view: { type: "home", blocks },
   });
 }
@@ -1091,6 +1068,191 @@ app.action("admin_lottery_cancel", async ({ action, ack, client, body }) => {
   }
 
   await refreshAdminHome(client, adminUserId);
+});
+
+// --- Admin inspect user ---
+app.action("admin_inspect_open", async ({ ack, body, client }) => {
+  await ack();
+  await client.views.open({
+    trigger_id: body.trigger_id,
+    view: {
+      type: "modal",
+      callback_id: "admin_inspect_modal",
+      title: { type: "plain_text", text: "Inspect User" },
+      submit: { type: "plain_text", text: "Inspect" },
+      blocks: [
+        {
+          type: "input",
+          block_id: "user_block",
+          label: { type: "plain_text", text: "User" },
+          element: {
+            type: "users_select",
+            action_id: "target_user",
+            placeholder: { type: "plain_text", text: "Select a user" },
+          },
+        },
+      ],
+    },
+  });
+});
+
+app.view("admin_inspect_modal", async ({ view, ack, client, body }) => {
+  await ack();
+  const adminId = body.user.id;
+  const targetId = view.state.values.user_block.target_user.selected_user;
+
+  const [account, job, loan, transactions, crypto, insurance, banStatus] =
+    await Promise.all([
+      convex.query(api.accounts.get, { userId: targetId }).catch(() => null),
+      convex.query(api.jobs.getJob, { userId: targetId }).catch(() => null),
+      convex.query(api.loans.check, { userId: targetId }).catch(() => null),
+      convex.query(api.transactions.list, { userId: targetId }).catch(() => []),
+      convex.query(api.crypto.portfolio, { userId: targetId }).catch(() => null),
+      convex.query(api.insurance.getPlan, { userId: targetId }).catch(() => null),
+      convex.query(api.admin.checkBan, { userId: targetId }).catch(() => ({ banned: false })),
+    ]);
+
+  const fmt = (n) => `$${n.toFixed(2)}`;
+  const blocks = [];
+
+  blocks.push({
+    type: "section",
+    text: { type: "mrkdwn", text: `*User:* <@${targetId}>` },
+  });
+
+  // Ban/strike status
+  if (account) {
+    const strikes = account.strikes || 0;
+    const adminFlag = account.isAdmin ? " · *ADMIN*" : "";
+    let banText = "Not banned";
+    if (banStatus.banned) {
+      banText = banStatus.expiry
+        ? `Banned until ${new Date(banStatus.expiry).toLocaleDateString()}`
+        : "Permanently banned";
+      if (banStatus.reason) banText += ` — ${banStatus.reason}`;
+    }
+    blocks.push({
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Status:* ${account.status}${adminFlag}` },
+        { type: "mrkdwn", text: `*Strikes:* ${strikes}` },
+        { type: "mrkdwn", text: `*Ban:* ${banText}` },
+        { type: "mrkdwn", text: `*Tier:* ${account.tier || "None"}` },
+      ],
+    });
+    blocks.push({ type: "divider" });
+  }
+
+  if (!account) {
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: "_No Southbag account._" },
+    });
+  } else {
+    // Account
+    blocks.push({
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Account #:* \`${account.accountNumber}\`` },
+        { type: "mrkdwn", text: `*Balance:* ${fmt(account.balance)}` },
+        { type: "mrkdwn", text: `*Opened:* ${new Date(account.createdAt).toLocaleDateString()}` },
+        { type: "mrkdwn", text: `*Notifications:* ${account.notifications ? "On" : "Off"}` },
+      ],
+    });
+    blocks.push({ type: "divider" });
+
+    // Job
+    if (job) {
+      blocks.push({
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Job:* ${job.title}` },
+          { type: "mrkdwn", text: `*Salary:* ${fmt(job.salary)}/shift` },
+        ],
+      });
+    } else {
+      blocks.push({ type: "section", text: { type: "mrkdwn", text: "*Job:* Unemployed" } });
+    }
+
+    // Loan
+    if (loan) {
+      blocks.push({
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Loan:* ${fmt(loan.principal)}` },
+          { type: "mrkdwn", text: `*Owed:* ${fmt(loan.currentOwed)}` },
+          { type: "mrkdwn", text: `*Rate:* ${(loan.interestRate * 100).toFixed(0)}%/hr` },
+        ],
+      });
+    }
+
+    // Insurance
+    if (insurance) {
+      blocks.push({
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Insurance:* ${insurance.plan}` },
+          { type: "mrkdwn", text: `*Active:* ${insurance.active ? "Yes" : "Expired"}` },
+        ],
+      });
+    }
+
+    // Crypto
+    if (crypto && crypto.holdings && crypto.holdings.length > 0) {
+      const lines = crypto.holdings.map((h) =>
+        `${h.coin}: ${h.amount} (${fmt(h.value)})`
+      );
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: `*Crypto:* ${lines.join(" · ")}` },
+      });
+    }
+
+    // Inventory
+    if (account.inventory && account.inventory.length > 0) {
+      const items = account.inventory.map((i) => i.name).join(", ");
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: `*Inventory:* ${items}` },
+      });
+    }
+
+    blocks.push({ type: "divider" });
+
+    // Recent transactions
+    if (transactions && transactions.length > 0) {
+      const lines = transactions.slice(0, 8).map((t) => {
+        const sign = t.amount >= 0 ? "+" : "";
+        return `${sign}${fmt(Math.abs(t.amount))}  ${t.description}`;
+      });
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: `*Recent Transactions:*\n${lines.join("\n")}` },
+      });
+    }
+  }
+
+  try {
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: {
+        type: "modal",
+        title: { type: "plain_text", text: "User Details" },
+        close: { type: "plain_text", text: "Close" },
+        blocks,
+      },
+    });
+  } catch (e) {
+    // trigger_id may have expired after view submission, fall back to DM
+    try {
+      await client.chat.postEphemeral({
+        channel: adminId,
+        user: adminId,
+        text: `Inspect results for <@${targetId}> — use the button from App Home to see the full modal.`,
+        blocks,
+      });
+    } catch (e2) {}
+  }
 });
 
 // --- Admin warn/ban modals (App Home) ---
@@ -1277,6 +1439,38 @@ app.view("admin_ban_modal", async ({ view, ack, client, body }) => {
     });
   } catch (e) {
     console.error("Error generating ban message:", e);
+  }
+});
+
+// --- Approve & Send handlers ---
+app.action("approve_warn", async ({ action, ack, client, body }) => {
+  await ack();
+  const { targetId, message } = JSON.parse(action.value);
+  try {
+    await client.chat.postMessage({ channel: targetId, text: message });
+    await client.chat.postEphemeral({
+      channel: body.user.id,
+      user: body.user.id,
+      text: `Warning sent to <@${targetId}>.`,
+    });
+  } catch (e) {
+    console.error("Error sending warning DM:", e);
+  }
+});
+
+app.action("approve_ban", async ({ action, ack, client, body }) => {
+  await ack();
+  const { targetId, message, reason, banExpiry } = JSON.parse(action.value);
+  try {
+    await convex.mutation(api.admin.ban, { userId: targetId, reason, banExpiry });
+    await client.chat.postMessage({ channel: targetId, text: message });
+    await client.chat.postEphemeral({
+      channel: body.user.id,
+      user: body.user.id,
+      text: `Ban applied and notice sent to <@${targetId}>.`,
+    });
+  } catch (e) {
+    console.error("Error applying ban:", e);
   }
 });
 
