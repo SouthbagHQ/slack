@@ -2555,6 +2555,78 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
         desc: "Contents unknown. Kevin is watching.",
       },
       {
+        id: "kevins_arm",
+        name: "Kevin's Arm",
+        price: 10000.0,
+        desc: "Not a replica. HR says not to ask which one.",
+      },
+      {
+        id: "kevins_blahaj",
+        name: "Kevin's Blahaj",
+        price: 666.66,
+        desc: "Forbidden shark. Tiny tie included. Kevin denies ownership.",
+      },
+      {
+        id: "kevins_left_sock",
+        name: "Kevin's Left Sock",
+        price: 13.0,
+        desc: "Still warm. This raises several compliance concerns.",
+      },
+      {
+        id: "kevins_spare_glasses",
+        name: "Kevin's Spare Glasses",
+        price: 320.0,
+        desc: "Looking through them makes every spreadsheet say your name.",
+      },
+      {
+        id: "kevins_lunch",
+        name: "Kevin's Lunch",
+        price: 47.0,
+        desc: "A sealed container labelled DO NOT PERCEIVE.",
+      },
+      {
+        id: "kevins_shadow",
+        name: "Kevin's Shadow",
+        price: 1250.0,
+        desc: "Folded badly. Moves when fluorescent lights flicker.",
+      },
+      {
+        id: "kevin_detector",
+        name: "Kevin Detector",
+        price: 29.99,
+        desc: "Beeps constantly. Either broken or extremely accurate.",
+      },
+      {
+        id: "kevin_repellent",
+        name: "Kevin Repellent",
+        price: 89.0,
+        desc: "Aerosol can. Smells like policy breach and lemon.",
+      },
+      {
+        id: "prohibited_shark_permit",
+        name: "Prohibited Shark Permit",
+        price: 140.0,
+        desc: "Authorises one shark. Explicitly not valid for Blahaj. Suspicious.",
+      },
+      {
+        id: "southbag_loyalty_card",
+        name: "Southbag Loyalty Card",
+        price: 19.99,
+        desc: "Every tenth fee is still charged. Loyalty matters.",
+      },
+      {
+        id: "office_air_sample",
+        name: "Office Air Sample",
+        price: 0.75,
+        desc: "Bagged near Kevin's door. Contains 12% dread by volume.",
+      },
+      {
+        id: "compliance_rock",
+        name: "Compliance Rock",
+        price: 4.2,
+        desc: "Painted grey. Passed three audits by remaining silent.",
+      },
+      {
         id: "office_light_bulb",
         name: "Office Light Bulb",
         price: 5.0,
@@ -2870,6 +2942,30 @@ function registerBankingCommands(app, convex, api, chat, env, ALLOWED_CHANNEL) {
         "A laminated card that says 'NO FEES' in Comic Sans. The fine print says 'lol jk maybe'.",
       kevins_briefcase:
         "It hums faintly. You haven't opened it. You won't. You can't.",
+      kevins_arm:
+        "It signed three forms while you were asleep. The handwriting is better than yours.",
+      kevins_blahaj:
+        "The shark wears a tiny tie. Support refuses to look directly at it.",
+      kevins_left_sock:
+        "It crawled three inches toward payroll. You pretended not to see.",
+      kevins_spare_glasses:
+        "You put them on once. Every balance showed negative Kevin.",
+      kevins_lunch:
+        "It expires yesterday. The container is still warm. The spoon is missing.",
+      kevins_shadow:
+        "It lies under your desk. It points toward Kevin even when Kevin is elsewhere.",
+      kevin_detector:
+        "It beeps faster when you think about refunds. So does Kevin.",
+      kevin_repellent:
+        "You sprayed it once. Kevin appeared to inspect the smell.",
+      prohibited_shark_permit:
+        "Stamped DENIED, then APPROVED, then DENIED again. The ink is wet.",
+      southbag_loyalty_card:
+        "It has one stamp. The stamp says FEE. All future stamps also say FEE.",
+      office_air_sample:
+        "You opened it slightly. The room became a meeting.",
+      compliance_rock:
+        "It is heavier when auditors enter the room. Nobody can explain this.",
       office_light_bulb:
         "60 watts of pure rebellion. The flickering has stopped. For now.",
       incident_report:

@@ -1,6 +1,14 @@
-FROM node:20-alpine
+FROM node:20-alpine AS runtime
+
 WORKDIR /app
+
+ENV NODE_ENV=production
+
 COPY package*.json ./
-RUN npm install --production
+RUN npm ci --omit=dev
+
 COPY . .
-CMD ["node", "src/index.js"]
+
+USER node
+
+CMD ["npm", "start"]

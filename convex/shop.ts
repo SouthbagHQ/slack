@@ -1,10 +1,22 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-const SHOP_ITEMS: Record<string, { name: string; price: number; description: string }> = {
+export const SHOP_ITEMS: Record<string, { name: string; price: number; description: string }> = {
   blahaj: { name: "Blahaj", price: 49.99, description: "An IKEA shark. Southbag Support hates this. Buy it anyway." },
   fee_insurance: { name: "Fee Insurance", price: 99.99, description: "Covers your next fee. Probably. No guarantees." },
   kevins_briefcase: { name: "Kevin's Briefcase", price: 250.00, description: "Contents unknown. Kevin is watching." },
+  kevins_arm: { name: "Kevin's Arm", price: 10000.00, description: "Not a replica. HR says not to ask which one." },
+  kevins_blahaj: { name: "Kevin's Blahaj", price: 666.66, description: "Forbidden shark. Tiny tie included. Kevin denies ownership." },
+  kevins_left_sock: { name: "Kevin's Left Sock", price: 13.00, description: "Still warm. This raises several compliance concerns." },
+  kevins_spare_glasses: { name: "Kevin's Spare Glasses", price: 320.00, description: "Looking through them makes every spreadsheet say your name." },
+  kevins_lunch: { name: "Kevin's Lunch", price: 47.00, description: "A sealed container labelled DO NOT PERCEIVE." },
+  kevins_shadow: { name: "Kevin's Shadow", price: 1250.00, description: "Folded badly. Moves when fluorescent lights flicker." },
+  kevin_detector: { name: "Kevin Detector", price: 29.99, description: "Beeps constantly. Either broken or extremely accurate." },
+  kevin_repellent: { name: "Kevin Repellent", price: 89.00, description: "Aerosol can. Smells like policy breach and lemon." },
+  prohibited_shark_permit: { name: "Prohibited Shark Permit", price: 140.00, description: "Authorises one shark. Explicitly not valid for Blahaj. Suspicious." },
+  southbag_loyalty_card: { name: "Southbag Loyalty Card", price: 19.99, description: "Every tenth fee is still charged. Loyalty matters." },
+  office_air_sample: { name: "Office Air Sample", price: 0.75, description: "Bagged near Kevin's door. Contains 12% dread by volume." },
+  compliance_rock: { name: "Compliance Rock", price: 4.20, description: "Painted grey. Passed three audits by remaining silent." },
   office_light_bulb: { name: "Office Light Bulb", price: 5.00, description: "For the flickering light. You know the one." },
   incident_report: { name: "2019 Incident Report", price: 500.00, description: "Redacted. All of it. Worth every cent." },
   southbag_mug: { name: "Southbag Mug", price: 12.50, description: "Says 'I survived Southbag Support' on the side. The handle is broken." },

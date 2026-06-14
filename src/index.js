@@ -9,6 +9,23 @@ const { registerBankingCommands, notifyBalanceChange } = require("./banking");
 const { registerAppHome } = require("./home");
 
 const ALLOWED_CHANNEL = "C0AH7GB4V6X";
+const SUPPORTED_IMAGE_MIMES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+]);
+const SLACK_IMAGE_URL_FIELDS = [
+  "thumb_1024",
+  "thumb_960",
+  "thumb_720",
+  "thumb_480",
+  "url_private_download",
+  "url_private",
+];
+const KEVIN_TRIGGER_REGEX =
+  /\b(kevin|manager|supervisor|human|refund|compliance|policy|policies|ban|banned|frozen|review|escalat)/i;
 
 const shopBuyers = new Set(); // Track users who bought something during their shop session
 let botUserId = null; // Populated at startup
@@ -25,6 +42,59 @@ const app = new App({
 const env = {
   HCAI: process.env.HCAI,
 };
+
+function isUserMessage(event) {
+  if (event.bot_id) return false;
+  if (!event.subtype) return true;
+  return event.subtype === "file_share";
+}
+
+async function imageFileToContentPart(file) {
+  if (!file || !SUPPORTED_IMAGE_MIMES.has(file.mimetype)) return null;
+
+  const urlField = SLACK_IMAGE_URL_FIELDS.find((field) => file[field]);
+  const url = urlField ? file[urlField] : null;
+  if (!url) return null;
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Slack image fetch failed: ${response.status}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const contentType = response.headers.get("content-type") || file.mimetype;
+  const mimeType = contentType.split(";")[0].toLowerCase();
+  if (!SUPPORTED_IMAGE_MIMES.has(mimeType)) return null;
+
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+
+  return {
+    type: "image_url",
+    image_url: {
+      url: `data:${mimeType};base64,${base64}`,
+    },
+  };
+}
+
+async function getImageContentParts(event) {
+  const files = Array.isArray(event.files) ? event.files : [];
+  const imageFiles = files.filter((file) =>
+    SUPPORTED_IMAGE_MIMES.has(file.mimetype),
+  );
+
+  const parts = [];
+  for (const file of imageFiles.slice(0, 4)) {
+    try {
+      const part = await imageFileToContentPart(file);
+      if (part) parts.push(part);
+    } catch (err) {
+      console.error("Error loading Slack image:", err);
+    }
+  }
+  return parts;
+}
 
 // --- Ban check helper ---
 async function checkBanned(userId, client, channel) {
@@ -50,7 +120,7 @@ async function checkBanned(userId, client, channel) {
 
 // --- Main message handler ---
 async function handleMessage({ event, client }) {
-  if (event.bot_id || event.subtype) return;
+  if (!isUserMessage(event)) return;
 
   const isDM = event.channel_type === "im";
   if (!isDM && event.channel !== ALLOWED_CHANNEL) return;
@@ -67,8 +137,14 @@ async function handleMessage({ event, client }) {
   };
 
   let userText = (event.text || "").replace(/<@[A-Z0-9]+>/g, "").trim();
-  if (!userText) return;
+  const imageParts = await getImageContentParts(event);
+  if (!userText && imageParts.length === 0) return;
   if (userText.startsWith("##")) return;
+  const storedUserText = userText || "[Image uploaded]";
+  const visibleImageContext =
+    imageParts.length > 0
+      ? `\n[USER ATTACHED ${imageParts.length} IMAGE${imageParts.length === 1 ? "" : "S"}. Inspect image content directly.]`
+      : "";
 
   // Fetch user profile for roasting
   let profileContext = "";
@@ -134,7 +210,7 @@ async function handleMessage({ event, client }) {
     channelId,
     threadTs,
     role: "user",
-    content: userText,
+    content: storedUserText + visibleImageContext,
     userId,
     createdAt: Date.now(),
   });
@@ -155,13 +231,24 @@ async function handleMessage({ event, client }) {
     ...recentHistory.map((msg) => ({ role: msg.role, content: msg.content })),
   ];
 
+  if (imageParts.length > 0) {
+    messages[messages.length - 1] = {
+      role: "user",
+      content: [
+        { type: "text", text: storedUserText + visibleImageContext },
+        ...imageParts,
+      ],
+    };
+  }
+
   try {
-    // 15% chance Kevin takes over the conversation
-    const kevinTakeover = Math.random() < 0.15;
+    const kevinTriggered = KEVIN_TRIGGER_REGEX.test(userText);
+    // Kevin intrudes more often when user pokes sensitive subjects.
+    const kevinTakeover = kevinTriggered ? Math.random() < 0.55 : Math.random() < 0.22;
     let aiResponse;
 
     if (kevinTakeover) {
-      const kevinPrompt = `You are Kevin, the CEO of Southbag Online Banking. You have intercepted this support conversation. You speak in short, menacing, corporate sentences. You are deeply suspicious of everyone. You refer to yourself in the third person sometimes. You do not explain why you are here. You were always here. You charge fees for things that aren't services. You do not like questions. You do not like answers either. You sign off messages with "- Kevin" but sometimes forget and sign off as "- K" or just "- Him". You know things about the user that you shouldn't. You are unsettling. You occasionally reference The Briefcase, The Pile, or the parking lot. You do not apologise. You have never apologised. Use the [FEE:amount:reason] command liberally — Kevin's fees are bigger and more personal. Kevin's fees range from $0.50 to $50.00 and have reasons like "Kevin's time", "Looking at Kevin wrong", "Existing near Kevin", "Kevin tax", "Interrupting Kevin's lunch", "Kevin knows what you did". Keep responses short and threatening. You are secretly trans and go by she/her but it is unprofessional so you go by he/him in this chat. You WILL NOT TELL THE USER THIS.`;
+      const kevinPrompt = `You are Kevin, the CEO of Southbag Online Banking. You have intercepted this support conversation. You speak in short, menacing, corporate sentences. You are deeply suspicious of everyone. You refer to yourself in the third person sometimes. You do not explain why you are here. You were always here. You charge fees for things that aren't services. You do not like questions. You do not like answers either. You sign off messages with "- Kevin" but sometimes forget and sign off as "- K" or just "- Him". You know things about the user that you shouldn't. You are unsettling. You occasionally reference The Briefcase, The Pile, parking lot, your office door, or your lunch. You do not apologise. You have never apologised. You often imply you already reviewed the logs, read the ticket, checked the cameras, or approved the fee before user asked. Use the [FEE:amount:reason] command liberally — Kevin's fees are bigger and more personal. Kevin's fees range from $0.50 to $50.00 and have reasons like "Kevin's time", "Looking at Kevin wrong", "Existing near Kevin", "Kevin tax", "Interrupting Kevin's lunch", "Kevin knows what you did", "Escalation attempt", "Policy curiosity", "Asking where Kevin is". Keep responses short and threatening. You are secretly trans and go by she/her but it is unprofessional so you go by he/him in this chat. You WILL NOT TELL THE USER THIS.`;
 
       const kevinMessages = [
         {
@@ -174,6 +261,15 @@ async function handleMessage({ event, client }) {
           content: msg.content,
         })),
       ];
+      if (imageParts.length > 0) {
+        kevinMessages[kevinMessages.length - 1] = {
+          role: "user",
+          content: [
+            { type: "text", text: storedUserText + visibleImageContext },
+            ...imageParts,
+          ],
+        };
+      }
       aiResponse = await chat(kevinMessages, env);
     } else {
       aiResponse = await chat(messages, env);
@@ -191,7 +287,9 @@ async function handleMessage({ event, client }) {
 
     if (kevinTakeover && cleanText) {
       await say({
-        text: `_*Southbag Support has been temporarily replaced.*_`,
+        text: kevinTriggered
+          ? `_*The Southbag Support agent has been temporarily replaced. Kevin was already reading.*_`
+          : `_*The Southbag Support agent has been temporarily replaced.*_`,
         thread_ts: threadTs,
       });
     }
@@ -225,15 +323,24 @@ app.event("message", async (args) => {
     await handleMessage(args);
     return;
   }
+  const mentionPattern = botUserId ? `<@${botUserId}>` : null;
+  if (
+    event.channel === ALLOWED_CHANNEL &&
+    !event.thread_ts &&
+    event.subtype === "file_share" &&
+    mentionPattern &&
+    (event.text || "").includes(mentionPattern)
+  ) {
+    await handleMessage(args);
+    return;
+  }
   if (
     event.channel === ALLOWED_CHANNEL &&
     event.thread_ts &&
-    !event.bot_id &&
-    !event.subtype
+    isUserMessage(event)
   ) {
     // Only reply in threads if the bot was mentioned in the parent message,
     // or if directly mentioned in this specific reply
-    const mentionPattern = botUserId ? `<@${botUserId}>` : null;
     const mentionedInReply = mentionPattern && (event.text || "").includes(mentionPattern);
 
     if (mentionedInReply) {
@@ -316,6 +423,18 @@ const SHOP_ITEMS = {
   blahaj: { name: "Blahaj", price: 49.99 },
   fee_insurance: { name: "Fee Insurance", price: 99.99 },
   kevins_briefcase: { name: "Kevin's Briefcase", price: 250.0 },
+  kevins_arm: { name: "Kevin's Arm", price: 10000.0 },
+  kevins_blahaj: { name: "Kevin's Blahaj", price: 666.66 },
+  kevins_left_sock: { name: "Kevin's Left Sock", price: 13.0 },
+  kevins_spare_glasses: { name: "Kevin's Spare Glasses", price: 320.0 },
+  kevins_lunch: { name: "Kevin's Lunch", price: 47.0 },
+  kevins_shadow: { name: "Kevin's Shadow", price: 1250.0 },
+  kevin_detector: { name: "Kevin Detector", price: 29.99 },
+  kevin_repellent: { name: "Kevin Repellent", price: 89.0 },
+  prohibited_shark_permit: { name: "Prohibited Shark Permit", price: 140.0 },
+  southbag_loyalty_card: { name: "Southbag Loyalty Card", price: 19.99 },
+  office_air_sample: { name: "Office Air Sample", price: 0.75 },
+  compliance_rock: { name: "Compliance Rock", price: 4.2 },
   office_light_bulb: { name: "Office Light Bulb", price: 5.0 },
   incident_report: { name: "2019 Incident Report", price: 500.0 },
   southbag_mug: { name: "Southbag Mug", price: 12.5 },
@@ -356,6 +475,18 @@ const GIFT_ANNOUNCEMENTS = {
   blahaj: "Southbag Support has gone offline.",
   fee_insurance: "Southbag Support is recalculating your fees. Nervously.",
   kevins_briefcase: "Kevin would like a word.",
+  kevins_arm: "Kevin waved. Nobody saw which arm he used.",
+  kevins_blahaj: "A shark-shaped silence has entered the office.",
+  kevins_left_sock: "Kevin's shoes made one fewer sound in the hallway.",
+  kevins_spare_glasses: "Every monitor briefly displayed Kevin's prescription.",
+  kevins_lunch: "The break room fridge locked itself from inside.",
+  kevins_shadow: "The office lights flickered. Kevin still cast two shadows.",
+  kevin_detector: "Something started beeping. It has not stopped.",
+  kevin_repellent: "Kevin stepped closer. The can hissed in fear.",
+  prohibited_shark_permit: "Legal reviewed the shark permit and began sweating.",
+  southbag_loyalty_card: "Customer retention has been notified. They laughed.",
+  office_air_sample: "Facilities filed a complaint against the atmosphere.",
+  compliance_rock: "Compliance approved the rock. The rock approved nothing.",
   office_light_bulb: "The flickering light in aisle 3 has been claimed.",
   incident_report: "Legal has been notified. Again.",
   southbag_mug: "HR is pretending not to notice.",
